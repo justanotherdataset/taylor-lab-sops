@@ -91,7 +91,8 @@ These are living documents. If something did not work, or needed explaining and 
 
 - **Small corrections** (typos, broken links, a changed module version): edit and commit directly, with a message saying what changed and why.
 - **Substantive changes** (a different tool, a changed threshold, a new analysis step): open a pull request or discuss with the lab first, since other people's methods sections may cite the current version. Say what you changed and what evidence prompted it.
-- **New SOPs**: follow the naming pattern (`SOP_<Topic>_<Environment>.md`), keep the explain-then-command structure, and add a row to the table at the top of this README — adding the file without the row is the usual way a SOP goes unnoticed.
+- **New SOPs**: write them against [`TUTORIAL_SPEC.md`](TUTORIAL_SPEC.md), which defines the audience, the document and step templates, the voice, and the conventions every SOP shares. Follow the naming pattern (`SOP_<Topic>_<Environment>.md`) and add a row to the table at the top of this README — adding the file without the row is the usual way a SOP goes unnoticed.
+- **Editing an existing SOP**: the same spec applies. It carries three scans — heading census, paragraph length, and script-header completeness — that tell you in seconds whether an edit made the document worse.
 - **Cross-references** between documents must name the file; before committing, check the target exists in the repository — a reference to a document that was never written is worse than no reference.
 
 If you document a threshold or a tool choice, write down the reasoning, not just the value. Most of the useful content in these SOPs is in the "why this number" paragraphs.

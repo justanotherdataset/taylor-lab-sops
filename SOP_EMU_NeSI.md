@@ -4,42 +4,40 @@
 
 **v2.0** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S
 
-This document covers everything from logging into NeSI through to generating combined count tables with Emu. The statistics that follow are in `SOP_R_Analysis.md`, which numbers its own sections from 1.
+This document covers everything from logging into NeSI through to generating combined count tables with Emu. The statistics that follow are in `SOP_R_Analysis.md`, which numbers its own sections from 1. It assumes no prior command-line experience and starts from `pwd` — it is the only document in this set that teaches the cluster itself; the other three assume it.
 
-**It assumes no prior command-line experience** and starts from `pwd`. It is the only document in this set that teaches the cluster itself; the other three assume it.
+### **Before You Start**
 
-**NeSI module versions used in this SOP:**
+- **You need** a NeSI account and project code (`<your_nesi_project_code>`), your raw Nanopore FASTQs, and about a day of wall-clock time across the queue. Replace `<your_nesi_project_code>` and `<your_project>` with your own values throughout.
+- **This does not cover** the R statistics (that is Part 2, `SOP_R_Analysis.md`) or short-read Illumina 16S (no ASV workflow here yet).
+- **No prior terminal experience needed** — this document starts at `pwd`. Section 1 teaches the cluster (login, bash, modules, SLURM); Section 2 teaches the data (16S, FASTQ, quality scores). For more grounding first, see the Genomics Aotearoa links in the appendix.
 
-| Tool | Module string |
-| --- | --- |
-| Emu | `Emu/3.6.2` |
-| NanoPlot | `NanoPlot/1.43.0-foss-2023a-Python-3.11.6` |
-| chopper | `chopper/0.12.0b-GCC-12.3.0` |
+## **Quick Roadmap**
 
-Verify the latest Emu module on your cluster with `module spider Emu`. The commands here are compatible with v3.4.0+.
+```
+[1] Getting started on NeSI   ->  login, bash, modules, SLURM, arrays
+[2] Understanding your data   ->  16S, amplicons, Nanopore, quality, FASTQ
+[3] Processing reads          ->  NanoPlot QC -> chopper filter -> NanoPlot QC
+[4] Emu profiling             ->  databases -> array run -> combined tables
+         |
+         v  count + taxonomy tables  ->  SOP_R_Analysis.md (Part 2)
+```
 
-## Analysis steps
+## **1. Getting Started on NeSI**
 
-1. Getting started on NeSI
-2. Understanding your data
-3. Processing Nanopore reads (NanoPlot QC, chopper filtering, NanoPlot QC again)
-4. Taxonomy and community profiling with Emu (databases, running Emu, combining outputs)
+### **What Is NeSI and Why We Use It**
 
-The R analysis that follows — phyloseq, decontamination, SRS normalisation, diversity, differential abundance and write-up — is in `SOP_R_Analysis.md`.
+NeSI (New Zealand eScience Infrastructure) is a national high-performance computing platform — a powerful shared computer researchers across New Zealand use. Bioinformatic analyses need more memory, CPU and storage than a laptop provides: a laptop has 8-16 GB of RAM and 2-4 cores; NeSI nodes have 256+ GB and 64+ cores.
 
-## 1. Getting Started on NeSI
+It also pre-installs most bioinformatics tools as modules, so you skip installation and dependency management, and it runs long jobs in the background — submit a job, close your laptop, do labwork, come back for the results.
 
-> **Before you begin:** Replace `<your_nesi_project_code>` with your NeSI project allocation code (e.g., uoa03068) and `<your_project>` with your project directory name throughout.
-
-### What is NeSI and why we use it
-
-NeSI (New Zealand eScience Infrastructure) is a national high-performance computing platform, a very powerful shared computer that researchers across New Zealand use. Bioinformatic analyses need more memory, processing power, and storage than a laptop provides. A typical laptop has 8-16 GB of RAM and 2-4 CPU cores; NeSI nodes can have 256+ GB and 64+ cores. NeSI also has most bioinformatics tools pre-installed as modules, so you skip installation and dependency management, and it lets you run long jobs in the background. Submit a job, close your laptop, do labwork, come back later for the results.
-
-### Logging in
+### **Logging In**
 
 Go to https://ondemand.nesi.org.nz/public/ and log in. Several applications are available; we use Mahuika Shell Access (the terminal where you submit jobs with `sbatch`) and Jupyter Lab (a GUI for file navigation and editing).
 
-One gotcha with Jupyter Lab: the terminal pane and the file-explorer pane operate independently. `cd`-ing in the terminal does not change what the file explorer shows, and clicking through folders in the explorer does not change your terminal's working directory. If your scripts seem to be missing, check that the file explorer is pointing at your working directory and not the default landing folder. Right-click a folder in the explorer and choose "Open in Terminal" to launch a terminal already pointed there.
+One gotcha with Jupyter Lab: the terminal and file-explorer panes work independently. `cd`-ing in the terminal does not move the explorer, and clicking folders in the explorer does not change the terminal's working directory.
+
+If your scripts seem to be missing, check the explorer is pointing at your working directory, not the landing folder. Right-click a folder and choose **Open in Terminal** to launch a terminal already pointed there.
 
 You start in your home directory (`/home/<username>/`). NeSI has three filesystems, and which one you use depends on what you are storing:
 
@@ -61,9 +59,9 @@ Now `cd ~/proj` takes you straight there, even right after logging in. Name it w
 realpath ~/proj
 ```
 
-Symlinks are cheap to make and safe to delete: `rm ~/proj` removes the symlink, not the directory it points to. **Do not run `rm -r ~/proj`**, which follows the link and recursively deletes the target. Just `rm`.
+Symlinks are cheap to make and safe to delete: `rm ~/proj` removes the symlink, not the directory it points to. **Do not run `rm -r ~/proj`**, which follows the link and recursively deletes the target. Use plain `rm`.
 
-### Basic bash commands
+### **Basic Bash Commands**
 
 The terminal is a text-based interface. Instead of clicking on folders and files, you type commands. The essentials:
 
@@ -121,13 +119,13 @@ nn_storage_quota                  # storage usage across all project directories
 nn_seff <job_id>                  # resource usage of a finished job, great for right-sizing
 ```
 
-### Using modules
+### **Using Modules**
 
 NeSI installs bioinformatics tools as modules. A module is a packaged piece of software you load when you need it and unload when you are done. This exists because different tools need different versions of the same underlying software (e.g., Python 3.8 vs 3.11), and having them all active at once causes conflicts.
 
 ```bash
 module spider emu                  # search for available versions of a tool
-module spider NanoPlot             # case-sensitive, try different capitalizations
+module spider NanoPlot             # case-sensitive, try different capitalisations
 module load Emu/3.6.2              # load a specific version
 module list                        # see what's currently loaded
 module purge                       # unload everything
@@ -135,7 +133,7 @@ module purge                       # unload everything
 
 **Run `module purge` first.** Get in the habit of purging before loading a new tool. This clears previously loaded modules and their dependencies, preventing conflicts. For example, chopper needs GCC 12.3 while NanoPlot needs Python 3.11; loading incompatible toolchains together breaks things.
 
-### SLURM: running jobs on the cluster
+### **SLURM: Running Jobs on the Cluster**
 
 NeSI is a shared resource used by hundreds of researchers at once. To manage this fairly, it uses a job scheduler called SLURM (Simple Linux Utility for Resource Management). Instead of running commands directly in the terminal (which ties up your session and has strict resource limits), you write a SLURM script that declares the resources you need and the commands to run. SLURM queues your job and runs it when resources are free.
 
@@ -177,37 +175,25 @@ scancel <job_id>                  # cancel a job
 nn_seff <job_id>                  # friendlier resource summary, great for right-sizing
 ```
 
-**Email notifications (optional).** Ask SLURM to email you when a job changes state by adding two flags to the header:
-
-```bash
-#SBATCH --mail-user <your_email>                  # your full email, e.g. alice@auckland.ac.nz
-#SBATCH --mail-type END,FAIL,TIME_LIMIT_80        # notify on completion, failure, 80% walltime
-```
+**Email notifications (optional).** Ask SLURM to email you when a job changes state by adding two directives to the header: `#SBATCH --mail-user <your_email>` (your full email) and `#SBATCH --mail-type END,FAIL,TIME_LIMIT_80` (notify on completion, failure, and at 80% of walltime).
 
 `TIME_LIMIT_80` is the most useful: if a job is approaching its walltime and will not finish, you get an email while it is still running, so you can decide whether to let it die and resubmit with more time. Available mail types: BEGIN, END, FAIL, REQUEUE, ALL, TIME_LIMIT_50, TIME_LIMIT_80, TIME_LIMIT_90. For long array jobs, FAIL alone is a reasonable minimum.
 
-**Choosing resources.** Start modest (1 hour, 4 GB, 2 CPUs) and increase if your job runs out of time or memory. Check the `.err` file: "OUT OF MEMORY" or "TIMEOUT" tells you which setting to raise. **Do not over-request.** Bigger requests wait longer in the queue because SLURM has to find a larger slot, and NeSI staff will flag persistent over-requesting. After a job or test batch finishes, run `nn_seff <job_id>` to see how much time and memory it actually used, and right-size the next submission accordingly.
+**Choosing resources.** Start modest (1 hour, 4 GB, 2 CPUs) and raise a setting if the job runs out of time or memory — the `.err` file's "OUT OF MEMORY" or "TIMEOUT" tells you which.
 
-### A note on array jobs
+**Do not over-request.** Bigger requests queue longer, because SLURM must find a larger slot, and NeSI staff flag persistent over-requesting. After a job or test batch finishes, run `nn_seff <job_id>` to see the time and memory it actually used, and right-size the next submission.
 
-When you need to process many files in parallel (e.g., hundreds of samples), SLURM supports array jobs. You submit one script and set the range at submission time — `sbatch --array=1-N%20 myjob.sh` runs N copies (throttled to 20 at once), each with a different `$SLURM_ARRAY_TASK_ID` counting from 1. Keeping the range out of the header, rather than hard-coding it, means the same script works for any sample count. This is far faster than a loop for heavy steps like Emu classification.
+### **A Note on Array Jobs**
 
-### Further reading
+To process many files in parallel (e.g., hundreds of samples), SLURM supports **array jobs**: one script, with the range set at submission — `sbatch --array=1-N%20 myjob.sh` runs N copies (throttled to 20), each with a different `$SLURM_ARRAY_TASK_ID` counting from 1.
 
-For a more thorough introduction to bash, SLURM, and HPC fundamentals, the Genomics Aotearoa Metagenomics Summer School materials are an excellent NeSI-specific resource:
+Keeping the range out of the header means the same script works for any sample count, and this is far faster than a loop for heavy steps like Emu classification.
 
-- Bash and shell: https://genomicsaotearoa.github.io/metagenomics_summer_school/day1/ex1_bash_and_scheduler/
-- HPC and SLURM scheduler: https://genomicsaotearoa.github.io/metagenomics_summer_school/day1/ex2_1_intro_to_scheduler/
-- Command-line and SBATCH quick reference: https://genomicsaotearoa.github.io/metagenomics_summer_school/resources/7_command_line_shortcuts/
-- NeSI filesystem and symlinks: https://genomicsaotearoa.github.io/metagenomics_summer_school/supplementary/supplementary_2/
-
-The summer school covers shotgun metagenomics rather than amplicon work, so its pipeline content does not apply to us, but its NeSI, bash, and SLURM material matches our environment exactly.
-
-## 2. Understanding Your Data
+## **2. Understanding Your Data**
 
 Before the commands, some background on the biology and technology.
 
-### What is 16S rRNA and why do we sequence it?
+### **What is 16S rRNA and why do we sequence it?**
 
 Every living cell makes proteins using molecular machines called **ribosomes**, which read messenger RNA and assemble amino acids into protein chains. Ribosomes have two subunits. In bacteria and archaea, the small subunit contains a ribosomal RNA molecule called **16S rRNA** (the "S" is Svedberg units, a sedimentation measure that correlates roughly with size).
 
@@ -219,7 +205,7 @@ The gene encoding 16S rRNA is approximately **1,542 bp** long and is extraordina
 
 Universal primers (to catch everything) plus variable regions (to distinguish species) are what make 16S the standard for bacterial identification and community profiling.
 
-### What is an amplicon?
+### **What is an amplicon?**
 
 Amplicon sequencing means sequencing a specific DNA region that was amplified by PCR. Here, the amplicon is the 16S rRNA gene.
 
@@ -229,7 +215,7 @@ For full-length 16S we use **27F** (forward, binds near the gene's start) and **
 
 For short-read Illumina 16S we typically use **341F** and **785R**, targeting the V3-V4 regions, giving an amplicon of about 440 bp.
 
-### How does Nanopore sequencing work?
+### **How does Nanopore sequencing work?**
 
 Oxford Nanopore sequencing works on a different principle from Illumina. A Nanopore **flow cell** contains a membrane with thousands of tiny protein pores. An ionic current flows through each pore; when a DNA strand is threaded through by a motor protein, it partially blocks the current. Different bases (A, T, G, C) block the current by different amounts, producing a characteristic signal. A neural network **basecaller** translates these current fluctuations back into a DNA sequence.
 
@@ -239,7 +225,7 @@ Consequences:
 - **Higher error rate.** The basecaller infers sequence from noisy signals. Even with the best models (super-high-accuracy, "SUP"), error rates are typically 0.5-1% on R10.4.1 flow cells with SUP basecalling (up to ~5% on legacy R9.4.1 chemistry), versus <0.1% for Illumina. Errors are roughly random (substitutions, insertions, deletions), not systematic.
 - **Real-time output.** Data is produced continuously as DNA passes through pores, rather than in batch cycles.
 
-### What are quality scores?
+### **What are quality scores?**
 
 Every base in a FASTQ file has a **quality score** (Phred or Q score), a measure of confidence in the base call, defined as **Q = -10 x log10(P)**, where P is the probability the call is wrong.
 
@@ -250,7 +236,7 @@ Every base in a FASTQ file has a **quality score** (Phred or Q score), a measure
 
 Illumina reads are typically Q30+ for most bases. Nanopore reads with the SUP basecaller typically average Q15-Q20. Filtering at Q10 removes the worst reads while keeping most usable data; Emu handles the remaining errors statistically.
 
-### What does a FASTQ file look like?
+### **What does a FASTQ file look like?**
 
 Each read is exactly four lines:
 
@@ -265,7 +251,7 @@ Line 1: header starting with `@` (read ID and metadata). Line 2: the DNA sequenc
 
 Q scores map to ASCII: Q0 = `!`, Q10 = `+`, Q20 = `5`, Q30 = `?`, Q40 = `I`. Higher characters mean better quality. Tools like NanoPlot decode these for you.
 
-### What does Nanopore data look like on disk?
+### **What does Nanopore data look like on disk?**
 
 Data from the sequencer (MinKNOW) comes as FASTQ files organised in subdirectories by barcode. Each barcode is one sample. Barcoding is how Nanopore multiplexes (runs multiple samples on one flow cell): during library prep each sample's DNA is tagged with a unique short sequence, and MinKNOW uses these tags to sort reads into per-sample files afterward.
 
@@ -282,9 +268,9 @@ sequencing_run/
 
 "SupHigh" refers to the super-high-accuracy basecalling model. Models trade speed for accuracy: "fast" is quick but less accurate, "hac" (high-accuracy) is the middle ground, and "sup" (super-high-accuracy) is slowest but most accurate. For 16S amplicon work, always use SUP if possible.
 
-### Full-length vs short-read: why it matters
+### **Full-Length vs Short-Read: Why It Matters**
 
-With **Illumina** (short reads) we typically sequence just the V3-V4 region (~440 bp) using 341F-785R. Reads are very accurate (<0.1% error), but the short fragment usually limits identification to genus level; many closely related species share identical V3-V4 sequences (e.g., several *Streptococcus* or *Bacillus* species cannot be distinguished by V3-V4 alone).
+With **Illumina** (short reads) we typically sequence only the V3-V4 region (~440 bp) using 341F-785R. Reads are very accurate (<0.1% error), but the short fragment usually limits identification to genus level; many closely related species share identical V3-V4 sequences (e.g., several *Streptococcus* or *Bacillus* species cannot be distinguished by V3-V4 alone).
 
 With **Nanopore** (long reads) we sequence nearly the entire gene (~1,500 bp) using 27F-1492R. This covers all nine variable regions, giving resolution potentially down to species level. The extra regions (V1, V2, V5-V9) carry species-specific differences that V3-V4 misses.
 
@@ -296,11 +282,11 @@ Because of this, overall alpha diversity may appear lower with Nanopore than wit
 
 Once reads are processed into a count table and taxonomy table, the downstream R/phyloseq workflow is the same regardless of platform, though interpretation differs. Nanopore-derived taxa are species-level identifications (not ASVs), counts are EM-estimated (not exact), and the total feature count is typically lower than with Illumina.
 
-## 3. Processing Nanopore Reads
+## **3. Processing Nanopore Reads**
 
 Quality control and filtering of raw sequencing data on NeSI.
 
-### Step 1. Organise your raw data
+### **Step 1. Organise Your Raw Data**
 
 When downloading from BaseSpace or Globus, put your data exactly where you want it in a named directory. Everything in this SOP runs out of one workspace directory. Create it and move in:
 
@@ -333,11 +319,11 @@ shopt -u nullglob
 
 **Check before continuing.** The loop prints one line per barcode with a read count. Compare that list against your barcode sheet: a barcode that printed a WARNING, or that is missing from the list entirely, will be absent from every downstream table, and nothing later in this pipeline will tell you it is gone.
 
-### Step 2. Quality assessment of raw reads
+### **Step 2. Quality Assessment of Raw Reads**
 
 Before filtering, assess raw read quality. **NanoPlot** generates an interactive HTML report with plots and statistics telling you whether the run was successful and helping you choose filtering thresholds. It is part of the NanoPack toolkit, built for Oxford Nanopore data, and produces plots of read length distributions, quality distributions, output over time, and summary statistics (total bases, median length, median quality, N50).
 
-Create a SLURM script called `01_nanoplot_raw.sh`:
+Create a SLURM script called `03a_nanoplot_raw.sh`:
 
 ```bash
 #!/bin/bash
@@ -347,8 +333,8 @@ Create a SLURM script called `01_nanoplot_raw.sh`:
 #SBATCH --time 00:30:00
 #SBATCH --mem 8G
 #SBATCH --cpus-per-task 8
-#SBATCH --output logs/nanoplot_raw_%j.out
-#SBATCH --error logs/nanoplot_raw_%j.err
+#SBATCH --output logs/%x_%j.out
+#SBATCH --error logs/%x_%j.err
 
 set -euo pipefail
 
@@ -365,13 +351,23 @@ NanoPlot \
     --title "Raw 16S reads"
 ```
 
-Submit with `sbatch 01_nanoplot_raw.sh`. No need to array this; it is lightweight and fast. Once finished, open the HTML report in `qc_raw/`. In Jupyter, click **Trust HTML** at the top of the file to enable the interactive plots.
+Submit with `sbatch 03a_nanoplot_raw.sh`. No need to array this — it is lightweight and finishes in a few minutes. `--loglength` plots read length on a log scale (useful when lengths span orders of magnitude) and `--plots dot` draws the length-vs-quality scatter.
 
-`--fastq raw_files/*.fastq` passes every barcode at once, so this report **pools all barcodes into one dataset** — use it to judge whether the *run* succeeded (overall length peak, median quality, N50), not any single sample. Per-barcode signals come from elsewhere: read counts from the Step 1 loop (compare against your barcode sheet) and per-barcode retention from the Step 3 chopper log. To QC one suspect barcode on its own, run NanoPlot on just that file (`NanoPlot --fastq raw_files/barcode07.fastq --outdir qc_raw/barcode07 --prefix barcode07_ --threads 8`).
+**Checkpoint.**
+
+```bash
+ls qc_raw/raw_NanoPlot-report.html
+```
+
+> **Expect** the report to exist. **If it is missing**, the job failed — read `logs/nanoplot_raw_*.err` (a wrong module string is the usual cause). Once it exists, open it in `qc_raw/`. In Jupyter, click **Trust HTML** at the top of the file to enable the interactive plots.
+
+`--fastq raw_files/*.fastq` passes every barcode at once, so this report **pools all barcodes into one dataset** — use it to judge whether the *run* succeeded (length peak, median quality, N50), not any single sample.
+
+Per-barcode signals come from elsewhere: read counts from the Step 1 loop, and per-barcode retention from the Step 3 chopper log. To QC one suspect barcode alone, run NanoPlot on that single file (`NanoPlot --fastq raw_files/barcode07.fastq --outdir qc_raw/barcode07 --prefix barcode07_ --threads 8`).
 
 **How to interpret the report:**
 
-- **Read length distribution.** Expect a sharp peak around 1,400-1,500 bp (successfully amplified full-length amplicons). You may also see a small peak below ~200 bp (primer dimers or failed amplifications), a tail above 1,800 bp (possible chimeras or off-target products), or a broad messy distribution with no clear peak (library prep problems).
+- **Read length distribution.** Expect a sharp peak around 1,400-1,500 bp (full-length amplicons), a small peak below ~200 bp (primer dimers or failed amplifications), a tail above 1,800 bp (possible **chimeras** — artificial hybrids formed when one species' amplicon primes another's template during PCR, which cause false species calls), or a broad messy distribution (library-prep problems).
 - **Quality score distribution.** Most reads should exceed Q10; with R10.4.1 flow cells and SUP basecalling, median quality is typically Q15-Q20. A median below Q10 means poor run quality. A bimodal distribution may indicate reads basecalled with different models.
 - **Total yield and read count.** For 16S you generally want at least 10,000-50,000 reads per barcode. More helps detect rare taxa, with diminishing returns above ~50,000 reads for most communities.
 - **N50.** The read length at which 50% of all bases sit in reads at least that long. For 16S it should be close to the amplicon length (~1,450-1,500 bp); a much shorter N50 suggests fragmented amplicons.
@@ -410,7 +406,7 @@ The distribution of read lengths. For a 16S run you want a dominant peak around 
 
 Every dot is one read, plotted by length (x) and mean quality (y). The dense cluster around 1,450-1,500 bp at Q15-Q25 is your good amplicon data. Dots below Q10 and below 1,200 bp are what chopper will remove. After filtering, this plot should be a clean rectangle with nothing outside your filter boundaries.
 
-### Step 3. Filtering with chopper
+### **Step 3. Filtering with Chopper**
 
 **Chopper** filters FASTQ reads by quality score and length. It is the Rust reimplementation of NanoFilt and NanoLyse (De Coster & Rademakers 2023, *Bioinformatics* 39(5):btad311), runs roughly 7x faster than the Python version, and is the recommended tool for new projects. We use it to remove reads that are too short (truncated amplicons missing variable regions), too long (likely chimeras), or too error-prone (low quality).
 
@@ -418,11 +414,11 @@ Every dot is one read, plotted by length (x) and mean quality (y). The dense clu
 
 **Why these thresholds:**
 
-- **`--quality 10` (minimum average quality Q10).** Removes reads where average per-base accuracy is below 90%. Emu does not need each read to be perfect; its EM algorithm works on the statistical pattern across thousands of reads, and as long as errors are roughly random (which they are in Nanopore data), the true composition emerges from the aggregate. Q10 is the widely used standard for Nanopore 16S.
-- **`--minlength 1200` (minimum length 1,200 bp).** Removes clearly truncated reads missing multiple variable regions. We use 1,200 rather than 1,500 bp because the 27F-1492R amplicon is approximately 1,500 bp and 16S gene length varies across species (roughly 1,400-1,540 bp); a 1,500 bp floor would discard many legitimate full-length reads. The 1,200 bp floor keeps genuine amplicons while removing reads that have lost enough sequence to compromise classification.
-- **`--maxlength 1800` (maximum length 1,800 bp).** Removes abnormally long reads that are likely **chimeras**, artificial hybrids formed during PCR when an incomplete amplicon from one species primes a different species' template. Chimeras cause false species detections. The 1,800 bp ceiling leaves generous room above the longest expected amplicons while catching obvious chimeric products.
+- **`--quality 10` (minimum average quality Q10).** Removes reads whose average per-base accuracy is below 90%. Emu does not need each read to be perfect: it estimates abundances statistically across thousands of reads (the EM algorithm, detailed in Section 4), so as long as errors are roughly random — which they are in Nanopore data — the true composition emerges from the aggregate. Q10 is the widely used standard for Nanopore 16S.
+- **`--minlength 1200` (minimum length 1,200 bp).** Removes truncated reads missing multiple variable regions. We use 1,200 rather than 1,500 bp because the 27F-1492R amplicon is approximately 1,500 bp and 16S gene length varies across species (roughly 1,400-1,540 bp); a 1,500 bp floor would discard many legitimate full-length reads. The 1,200 bp floor keeps genuine amplicons while removing reads that have lost enough sequence to compromise classification.
+- **`--maxlength 1800` (maximum length 1,800 bp).** Removes abnormally long reads that are likely **chimeras** (defined in Step 2). The 1,800 bp ceiling leaves generous room above the longest expected amplicons while catching obvious chimeric products.
 
-Create a SLURM script called `02_chopper_filter.sh`:
+Create a SLURM script called `03b_chopper_filter.sh`:
 
 ```bash
 #!/bin/bash
@@ -432,8 +428,8 @@ Create a SLURM script called `02_chopper_filter.sh`:
 #SBATCH --time 01:00:00
 #SBATCH --mem 8G
 #SBATCH --cpus-per-task 8
-#SBATCH --output logs/chopper_%j.out
-#SBATCH --error logs/chopper_%j.err
+#SBATCH --output logs/%x_%j.out
+#SBATCH --error logs/%x_%j.err
 
 set -euo pipefail
 
@@ -472,15 +468,15 @@ done
 echo "=== Chopper filtering complete === $(date)"
 ```
 
-Submit with `sbatch 02_chopper_filter.sh`. No array needed; chopper is fast.
+Submit with `sbatch 03b_chopper_filter.sh`. No array needed — chopper filters a typical run in a few minutes (roughly 7x faster than NanoFilt).
 
 You should typically retain 60-85% of reads; a clean library (like the worked example below, ~85%) sits at the top of that band. Retaining under ~50% overall, or under ~30% for a single barcode, suggests quality or fragmentation problems — check that barcode's NanoPlot output.
 
-### Step 4. Quality assessment of filtered reads
+### **Step 4. Quality Assessment of Filtered Reads**
 
 Run NanoPlot again on the filtered reads to compare before and after. This confirms the filters removed the short fragments and low-quality tails without cutting into the main amplicon peak.
 
-Create a SLURM script called `03_nanoplot_filtered.sh`:
+Create a SLURM script called `03c_nanoplot_filtered.sh`:
 
 ```bash
 #!/bin/bash
@@ -490,8 +486,8 @@ Create a SLURM script called `03_nanoplot_filtered.sh`:
 #SBATCH --time 00:30:00
 #SBATCH --mem 8G
 #SBATCH --cpus-per-task 8
-#SBATCH --output logs/nanoplot_filt_%j.out
-#SBATCH --error logs/nanoplot_filt_%j.err
+#SBATCH --output logs/%x_%j.out
+#SBATCH --error logs/%x_%j.err
 
 set -euo pipefail
 
@@ -508,7 +504,7 @@ NanoPlot \
     --title "Filtered 16S reads (Q>=10, 1200-1800 bp)"
 ```
 
-Submit with `sbatch 03_nanoplot_filtered.sh`.
+Submit with `sbatch 03c_nanoplot_filtered.sh`; it finishes in a few minutes, like the raw run.
 
 **What to compare between raw and filtered:**
 
@@ -536,10 +532,6 @@ Number, percentage and megabases of reads above quality cutoffs
 >Q30:	1772122 (10.0%) 2663.2Mb
 ```
 
-### Interpreting NanoPlot output
-
-NanoPlot produces several plots. You do not need all of them; these are the key ones.
-
 **Read length histogram (filtered):**
 
 <img width="700" height="500" alt="Read length histogram, filtered" src="https://github.com/user-attachments/assets/0fb8ff83-5d8b-4b34-bd29-5a49603d44d9" />
@@ -552,15 +544,13 @@ After filtering, expect a single tight peak around 1,400-1,500 bp with sharp cut
 
 The cloud of points should concentrate in a clean rectangle bounded by your filters: 1,200-1,800 bp on the x-axis, Q10+ on the y-axis, densest around 1,450-1,500 bp and Q15-Q25. No dots below Q10 or outside the length range should remain. This is the single most informative NanoPlot output because it shows both filter dimensions at once.
 
-**Other plots.** NanoPlot also produces log-scaled scatter plots (more useful for whole-genome data than amplicons), weighted histograms (counting total bases instead of total reads; nearly identical to the unweighted version for amplicons since reads are roughly the same length), and cumulative yield plots (a near-vertical jump at the amplicon length). These are less critical for amplicon QC.
+For a plot-by-plot reference (including the log-scaled, weighted and cumulative-yield plots), see the NanoPlot appendix.
 
-**For your thesis.** The two most useful are the read length histogram (raw vs filtered, side by side) and the filtered length-vs-quality scatter. The before/after comparison is particularly effective because reviewers can immediately see what was removed and what was kept.
-
-## 4. Taxonomy and Community Profiling with Emu
+## **4. Taxonomy and Community Profiling with Emu**
 
 Setting up reference databases, running Emu for taxonomic classification, and combining results across samples.
 
-### What Emu does and why we use it
+### **What Emu Does and Why We Use It**
 
 Emu (https://github.com/treangenlab/emu) is a relative abundance estimator for 16S sequences, optimised for error-prone full-length reads. It takes your filtered FASTQ reads and classifies them against a reference database to determine which bacteria are present and at what abundances.
 
@@ -570,7 +560,7 @@ Emu (https://github.com/treangenlab/emu) is a relative abundance estimator for 1
 
 1. **Alignment with minimap2.** Emu aligns each read against the reference database using minimap2, a fast aligner for long, error-prone reads. For each read, minimap2 reports the top ~50 matching references (the `--N` parameter). Because of sequencing errors and the similarity of closely related 16S sequences, many reads match multiple species roughly equally well. This **multi-mapping** is the central challenge of 16S classification with noisy long reads.
 
-2. **The problem with "best hit."** Assigning each read to its single best match is naive. When a read has 95% identity to Species A and 94.5% to Species B, that 0.5% could easily be sequencing error rather than biology. Across thousands of reads these small misassignments add up, creating false positives and distorting abundances.
+2. **The problem with "best hit."** Assigning each read to its single best match is naive. When a read has 95% identity to Species A and 94.5% to Species B, that 0.5% may be sequencing error rather than biology. Across thousands of reads these small misassignments add up, creating false positives and distorting abundances.
 
 3. **Expectation-Maximization (EM).** Emu resolves this iteratively:
    - **Start:** assume all database species are equally likely.
@@ -578,11 +568,11 @@ Emu (https://github.com/treangenlab/emu) is a relative abundance estimator for 1
    - **M-step:** update each species' abundance by summing the probabilities assigned to it across all reads.
    - **Repeat** until abundances stabilise (typically 10-50 iterations).
 
-   The key idea is that EM uses **community context** to resolve ambiguous reads. If read #1 maps equally well to Species A and B, but thousands of other reads clearly map to A and almost none to B, EM infers read #1 probably came from A too. Species without strong unique support shrink toward zero, eliminating false positives.
+   The key idea is that EM uses **community context** to resolve ambiguous reads. If read #1 maps equally well to Species A and B, but thousands of other reads map cleanly to A and almost none to B, EM infers read #1 probably came from A too. Species without strong unique support shrink toward zero, eliminating false positives.
 
 4. **Output.** After convergence, Emu reports the estimated relative abundance and read count for each surviving species. Species below a threshold (default 0.0001, i.e. 0.01%) are treated as not present.
 
-### Understanding the reference databases
+### **Understanding the Reference Databases**
 
 A reference database is a curated collection of known 16S sequences, each labelled with its taxonomy. When Emu classifies a read it is asking which known sequence the read most closely matches. The database's completeness directly affects results: a bacterium not represented in the database cannot be identified correctly; it is either classified as a close relative (if one exists) or reported as unclassified. This is why database choice matters.
 
@@ -607,7 +597,7 @@ We set up **both** SILVA and RDP:
 
 **Run both and compare.** It is little extra effort and worth it. A taxon appearing in both SILVA and RDP results is more likely genuinely present. A taxon appearing with only one database is worth investigating; it could be a real organism missing from the other database, or a misclassification.
 
-### Setting up the databases
+### **Setting Up the Databases**
 
 You only need to do this once per project. If someone in your lab has already set up the databases in a shared directory, point your `DB_PATH` there instead of downloading again. Databases are several GB, so store them on `/nesi/nobackup/` (more space, not backed up, fine since you can re-download).
 
@@ -633,7 +623,7 @@ tar -xvf ${EMU_PREBUILT_DB}.tar
 rm -f ${EMU_PREBUILT_DB}.tar
 ```
 
-**Step 3: Download RDP.** Same pattern, just change the two `export` lines:
+**Step 3: Download RDP.** Same pattern; change only the two `export` lines:
 
 ```bash
 export EMU_PREBUILT_DB='rdp'
@@ -645,13 +635,23 @@ tar -xvf ${EMU_PREBUILT_DB}.tar
 rm -f ${EMU_PREBUILT_DB}.tar
 ```
 
+**How long it takes.** Each archive is a few GB; fetch and extract together take roughly 10-30 minutes per database, depending on network load. `osf fetch` prints a progress bar — if it sits at 0% for more than a minute, the problem is your connection, not the command.
+
+**Checkpoint.** After extracting each database, confirm the directory holds the two files Emu needs:
+
+```bash
+ls ${EMU_DATABASE_DIR}
+```
+
+> **Expect** `species_taxid.fasta` and `taxonomy.tsv` (plus a few smaller files). **If either is missing**, the tar did not extract fully — re-run the `osf fetch` and `tar -xvf` steps. Emu fails later with a minimap2 or "file not found" error if this directory is incomplete.
+
 **Note your database path.** You need it for every Emu command. The rest of this SOP uses `DB_PATH`:
 
 ```bash
 DB_PATH=/nesi/nobackup/<your_nesi_project_code>/<your_project>/emu_databases/silva
 ```
 
-### Running Emu
+### **Running Emu**
 
 We use a SLURM **array job** to process all samples in parallel. A sequential loop processes one sample at a time, fine for a handful of barcodes but slow at scale (e.g., 192 samples x ~10 minutes each = ~32 hours). An array job submits each sample as an independent task, and SLURM runs them simultaneously, so a run that takes a day sequentially can finish in under an hour.
 
@@ -666,7 +666,9 @@ ls filtered/*_filtered.fastq > emu_manifest.txt
 wc -l emu_manifest.txt
 ```
 
-**Step 2: Create the array job script.** Save as `emu_array.sh`. Leave the array range out of the header and set it at submission (Step 3), so the same script works for any sample count. Test your resources first: submit a small range (say `--array=1-10`), check with `nn_seff` whether time, memory, and CPUs were enough, then submit the rest.
+> **Expect** the same number as your barcode/sample count. **Fewer** means a filtered FASTQ is missing — re-check that Step 3 finished for every sample before submitting the array.
+
+**Step 2: Create the array job script.** Save as `04a_emu_array.sh`. The header carries no `--array` line — you set the real range at submission (Step 3), so the same script works for any sample count. Test your resources first: submit a small range (say `--array=1-10`), check with `nn_seff` whether time, memory, and CPUs were enough, then submit the rest.
 
 ```bash
 #!/bin/bash
@@ -676,9 +678,10 @@ wc -l emu_manifest.txt
 #SBATCH --time 00:50:00
 #SBATCH --mem 10G
 #SBATCH --cpus-per-task 8
-#SBATCH --array 1-1                   # placeholder; set the real range at submission (Step 3)
-#SBATCH --output logs/emu_%A_%a.out   # %A = array job ID, %a = task index
-#SBATCH --error logs/emu_%A_%a.err
+# No --array line here on purpose — set the real range at submission (Step 3):
+#     sbatch --array=1-N%20 04a_emu_array.sh
+#SBATCH --output logs/%x_%A_%a.out   # %A = array job ID, %a = task index
+#SBATCH --error logs/%x_%A_%a.err
 
 set -euo pipefail
 
@@ -719,20 +722,30 @@ echo "=== Done: ${SAMPLE} === $(date)"
 
 ```bash
 N=$(wc -l < emu_manifest.txt)          # number of samples
-sbatch --array=1-${N}%20 emu_array.sh
+sbatch --array=1-${N}%20 04a_emu_array.sh
 ```
 
-**Set the range every time.** Run `sbatch emu_array.sh` without `--array` and the `1-1` placeholder means only the first sample is processed — the job succeeds with no error, and every other sample is silently missing. Check the task count in `squeue -u $USER` after submitting.
+**Set the range every time.** We leave `--array` out of the header on purpose. Some pipelines keep a `#SBATCH --array 1-1` placeholder instead, but that is a trap: submit without overriding it and only the first sample is processed — the job succeeds with no error, and every other sample is silently missing.
+
+With no `--array` line, a forgotten range fails loudly instead (`$SLURM_ARRAY_TASK_ID` is unset under `set -u`). Check the task count in `squeue -u $USER` after submitting.
 
 Monitor with `squeue -u $USER`. Each task writes its own log in `logs/`, so if a sample fails you can check its `.err` file directly.
 
-**For the RDP run**, copy the script to `emu_array_rdp.sh`, point `DB_PATH` at `emu_databases/rdp`, and change `--output-dir` to `./emu_results/rdp`:
+**Checkpoint.** When the array finishes, confirm every task produced a result:
+
+```bash
+ls -1 emu_results/silva/*_rel-abundance.tsv | wc -l
+```
+
+> **Expect** the same number as `wc -l emu_manifest.txt`. **Fewer** means some tasks failed — list them with `sacct -j <job_id> --format=JobID,State,ExitCode` and read the matching `logs/emu_array_*.err`.
+
+**For the RDP run**, copy the script to `04b_emu_array_rdp.sh`, point `DB_PATH` at `emu_databases/rdp`, and change `--output-dir` to `./emu_results/rdp`:
 
 ```bash
 DB_PATH=/nesi/nobackup/<your_nesi_project_code>/<your_project>/emu_databases/rdp
 ```
 
-Submit separately, again setting the range: `sbatch --array=1-$(wc -l < emu_manifest.txt)%20 emu_array_rdp.sh`.
+Submit separately, again setting the range: `sbatch --array=1-$(wc -l < emu_manifest.txt)%20 04b_emu_array_rdp.sh`.
 
 **How the array job works.** `--array=1-N` launches N tasks (indices 1 to N), each with a unique `$SLURM_ARRAY_TASK_ID`. The `sed` command uses this to pick the matching manifest line, so task 1 processes the first sample, task 2 the second, and so on. Each task requests its own memory and CPUs, so they do not compete.
 
@@ -752,19 +765,21 @@ Submit separately, again setting the range: `sbatch --array=1-$(wc -l < emu_mani
 - `--keep-read-assignments` — writes a per-read file with the probability distribution across species for each read. Useful for QC, but large.
 - `--min-abundance 0.0001` — the default threshold (0.01%). Raise it (e.g., `0.01` for 1%) to reduce noise, or leave it at the default for maximum sensitivity.
 - `--output-unclassified` — writes separate FASTA files for unmapped and unclassified reads. Useful for investigating your "unassigned" fraction.
-- `--min-pid 90` — minimum percent identity for an alignment, based on the NM tag (default `0`, i.e. no filter). The value is a **percent out of 100**, so `90` means 90% identity. Do not write `0.9` expecting 90%; Emu reads that as 0.9% identity, which filters nothing. Setting `90` removes very poor matches, reducing false positives at the risk of missing divergent taxa. By default Emu applies no PID filter and lets the EM algorithm resolve ambiguous alignments statistically, which is usually the better approach for noisy long reads, so only raise this if you are specifically chasing false positives, and compare against your unfiltered run rather than replacing it.
+- `--min-pid 90` — minimum percent identity, from the NM tag (default `0`, no filter). The value is a **percent out of 100**: `90` means 90%. Do not write `0.9` expecting 90%; Emu reads that as 0.9% identity, which filters nothing. Setting `90` drops poor matches — fewer false positives, but risks missing divergent taxa. For noisy long reads the default (no filter, letting EM resolve ambiguities) is usually better; raise it only to chase false positives, comparing against your unfiltered run rather than replacing it.
 - `--min-align-len 1000` — minimum aligned query length in bp (default `0`). Discards short partial alignments that may lack enough variable regions for reliable classification.
 - `--max-align-len` — maximum aligned query length, default `2000`. Silently caps the alignment length Emu considers. Fine for standard 27F-1492R amplicons (~1,500 bp), but for longer fragments (e.g., 16S-ITS-23S operons) raise it or reads are discarded without warning.
 
 **What Emu outputs.** For each sample, a file called `<sample>_rel-abundance.tsv`. Each row is a detected taxon with columns: tax_id (NCBI taxonomy ID), species, genus, family, order, class, phylum, superkingdom, abundance (relative, 0-1), and (with `--keep-counts`) estimated counts.
 
-**About estimated counts.** Emu's counts are not always whole numbers. You might see 4.6 instead of 5. The EM algorithm distributes ambiguous reads probabilistically, so a read mapping equally well to two species contributes 0.5 to each. Per the Emu docs, the estimated count is the product of estimated relative abundance and total classified reads, which is why it is fractional. We round to whole numbers in R before analysis; this adds a tiny amount of imprecision but is necessary for count-based methods.
+**About estimated counts.** Emu's counts are not always whole numbers — you might see 4.6 instead of 5. The EM algorithm distributes ambiguous reads probabilistically, so a read mapping equally well to two species contributes 0.5 to each; per the Emu docs, the count is relative abundance x total classified reads, which is why it is fractional.
 
-### Combining Emu outputs
+We round to whole numbers in R before analysis. This adds a little imprecision but is necessary for count-based methods.
+
+### **Combining Emu Outputs**
 
 After all array tasks finish, merge the per-sample files into combined tables.
 
-Use the `combine_emu_results.py` script below — this is the **standard method**, and the one Part 2 expects. It produces separate abundance and counts tables with identical column layouts across every database in one pass, and it parses both the split-column format and any single-column semicolon-delimited lineage format into the same structure. This keeps the downstream R code identical no matter which database a table came from, and it writes the exact filename Part 2 loads (`emu-combined-counts_<db>.tsv`).
+Use the `04_combine_emu_results.py` script below — this is the **standard method**, and the one Part 2 expects. It produces separate abundance and counts tables with identical column layouts across every database in one pass, and it parses both the split-column format and any single-column semicolon-delimited lineage format into the same structure. This keeps the downstream R code identical no matter which database a table came from, and it writes the exact filename Part 2 loads (`emu-combined-counts_<db>.tsv`).
 
 Emu also ships a built-in `combine-outputs` subcommand. It is a quick way to eyeball one database's results, but it writes different filenames that Part 2 does not read, so use the script here for anything feeding Part 2 — see *Alternative: `emu combine-outputs`* at the end of this section.
 
@@ -772,7 +787,7 @@ Emu also ships a built-in `combine-outputs` subcommand. It is a quick way to eye
 >
 > Sample names come from the filename, so every per-sample file under a database directory must have a unique basename even if they sit in different subdirectories — a `plate1/barcode01_rel-abundance.tsv` and a `plate2/barcode01_rel-abundance.tsv` both resolve to `barcode01`. The script stops with an error if two collide, rather than discarding one sample's counts and writing the other's into two identically named columns.
 
-Save this as `combine_emu_results.py` in your project directory:
+Save this as `04_combine_emu_results.py` in your project directory:
 
 ```python
 #!/usr/bin/env python3
@@ -781,7 +796,7 @@ Combine Emu per-sample abundance files into one table per database.
 Handles both split-column and single-column lineage taxonomy formats.
 
 Usage:
-    python3 combine_emu_results.py /path/to/emu_results [db1 db2 ...]
+    python3 04_combine_emu_results.py /path/to/emu_results [db1 db2 ...]
 
     First argument:  path to emu_results containing one subdirectory per
                      database (e.g., silva/, rdp/).
@@ -885,7 +900,7 @@ def combine_database(db_path, db_name):
 
 # ── Main ──
 if len(sys.argv) < 2:
-    print("Usage: python3 combine_emu_results.py /path/to/emu_results [db1 db2 ...]")
+    print("Usage: python3 04_combine_emu_results.py /path/to/emu_results [db1 db2 ...]")
     sys.exit(1)
 
 base = sys.argv[1]
@@ -907,13 +922,13 @@ print("\nDone!")
 Run it from NeSI (Python 3 is available by default):
 
 ```bash
-python3 combine_emu_results.py /nesi/nobackup/<your_nesi_project_code>/<your_project>/emu_results
+python3 04_combine_emu_results.py /nesi/nobackup/<your_nesi_project_code>/<your_project>/emu_results
 ```
 
 Or specify which databases to combine:
 
 ```bash
-python3 combine_emu_results.py /nesi/nobackup/<your_nesi_project_code>/<your_project>/emu_results silva rdp
+python3 04_combine_emu_results.py /nesi/nobackup/<your_nesi_project_code>/<your_project>/emu_results silva rdp
 ```
 
 **Output files** (written to each database directory):
@@ -932,7 +947,7 @@ for db in silva rdp; do
     if [ -f "$f" ]; then
         echo "  $(head -1 "$f" | tr '\t' '\n' | tail -n +9 | wc -l) samples, $(tail -n +2 "$f" | wc -l) taxa"
     else
-        echo "  (no combined counts table — did combine_emu_results.py run for ${db}?)"
+        echo "  (no combined counts table — did 04_combine_emu_results.py run for ${db}?)"
     fi
 done
 ```
@@ -941,9 +956,9 @@ The `else` branch matters: without it, a combine step that silently produced not
 
 Download the counts and abundance files to your computer for the R analysis.
 
-#### Alternative: `emu combine-outputs`
+#### **Alternative: `emu combine-outputs`**
 
-Emu's built-in `combine-outputs` subcommand merges the per-sample tables for one database at a time. It is handy for a quick look, but its output is named `emu-combined-<rank>.tsv` (and, with `--counts`, `emu-combined-<rank>-counts.tsv`) — **not** the `emu-combined-counts_<db>.tsv` that Part 2 loads — so it is not the handoff. Use `combine_emu_results.py` above for anything feeding Part 2.
+Emu's built-in `combine-outputs` subcommand merges the per-sample tables for one database at a time. It is handy for a quick look, but its output is named `emu-combined-<rank>.tsv` (and, with `--counts`, `emu-combined-<rank>-counts.tsv`) — **not** the `emu-combined-counts_<db>.tsv` that Part 2 loads — so it is not the handoff. Use `04_combine_emu_results.py` above for anything feeding Part 2.
 
 ```bash
 # One database, species level: abundance then counts
@@ -952,3 +967,53 @@ emu combine-outputs emu_results/silva species --counts   # needs --keep-counts a
 ```
 
 The counts table only works if you ran `emu abundance` with `--keep-counts`; without it there is no way to recover counts from abundance-only output short of re-running Emu.
+
+## **Troubleshooting**
+
+The inline **Checkpoint** and failure notes at each step are the first place to look; this table points you to them.
+
+| Symptom | Likely cause | Where to look |
+| --- | --- | --- |
+| A barcode is missing from every table | the Step 1 loop printed a WARNING or skipped it | Section 3, Step 1 "Check before continuing" |
+| NanoPlot report never appears | job failed silently (usually a wrong module string) | Section 3, Step 2 checkpoint (`logs/nanoplot_raw_*.err`) |
+| Retention far below 60% | quality or fragmentation problems in the library | Section 3, Step 3 retention note |
+| Emu abundance fails with "file not found" | database directory extracted incompletely | Section 4, "Setting up the databases" checkpoint |
+| Samples missing from the combined table | a task ran out of memory or lost its FASTQ | Section 4, "Running Emu" completion checkpoint |
+| Combine script exits with a sample-name error | two per-sample files collided on one basename | Section 4, "Combining Emu outputs" (the collision exit) |
+
+## **Appendices**
+
+### **A. NeSI Module Versions**
+
+The module strings this SOP was written against. Verify the latest Emu module on your cluster with `module spider Emu`; the commands here are compatible with v3.4.0+.
+
+| Tool | Module string |
+| --- | --- |
+| Emu | `Emu/3.6.2` |
+| NanoPlot | `NanoPlot/1.43.0-foss-2023a-Python-3.11.6` |
+| chopper | `chopper/0.12.0b-GCC-12.3.0` |
+
+### **B. NanoPlot Plot Reference**
+
+NanoPlot produces several plots beyond the two shown in Steps 2 and 4. You do not need all of them; this is what the rest show.
+
+**Other plots.** NanoPlot also produces log-scaled scatter plots (more useful for whole-genome data than amplicons), weighted histograms (counting total bases instead of total reads; nearly identical to the unweighted version for amplicons since reads are roughly the same length), and cumulative yield plots (a near-vertical jump at the amplicon length). These are less critical for amplicon QC.
+
+**For your thesis.** The two most useful are the read length histogram (raw vs filtered, side by side) and the filtered length-vs-quality scatter. The before/after comparison is particularly effective because reviewers can immediately see what was removed and what was kept.
+
+### **C. Further Reading**
+
+For a more thorough introduction to bash, SLURM, and HPC fundamentals, the Genomics Aotearoa Metagenomics Summer School materials are an excellent NeSI-specific resource:
+
+- Bash and shell: https://genomicsaotearoa.github.io/metagenomics_summer_school/day1/ex1_bash_and_scheduler/
+- HPC and SLURM scheduler: https://genomicsaotearoa.github.io/metagenomics_summer_school/day1/ex2_1_intro_to_scheduler/
+- Command-line and SBATCH quick reference: https://genomicsaotearoa.github.io/metagenomics_summer_school/resources/7_command_line_shortcuts/
+- NeSI filesystem and symlinks: https://genomicsaotearoa.github.io/metagenomics_summer_school/supplementary/supplementary_2/
+
+The summer school covers shotgun metagenomics rather than amplicon work, so its pipeline content does not apply to us, but its NeSI, bash, and SLURM material matches our environment exactly.
+
+### **D. Primary References**
+
+- **Emu** — Curry et al. 2022, *Nature Methods* 19:845-853 (relative-abundance estimation for full-length 16S reads).
+- **chopper / NanoFilt** — De Coster & Rademakers 2023, *Bioinformatics* 39(5):btad311.
+- **SILVA** — Quast et al. 2013, *Nucleic Acids Research* 41(D1):D590-D596.

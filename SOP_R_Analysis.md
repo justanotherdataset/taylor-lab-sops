@@ -36,12 +36,13 @@ SECTION 5: Exploratory QC
 SECTION 6: Normalisation
    Rarefaction curve → SRS to Cmin → ps_srs
                     ↓
-SECTIONS 7-11: Analysis
+SECTIONS 7-12: Analysis
    • Alpha diversity        (7)
    • Beta diversity         (8)
    • Taxonomy barplots      (9)
    • Differential abundance (10)
    • Indicator species      (11)
+   • Co-occurrence networks (12, optional)
 ```
 
 This SOP covers parallel designs, where each animal received only one treatment. If your samples are not independent (repeated measures, co-housed animals, nested designs), the diversity and PERMANOVA steps need restricted permutations and the differential abundance models need random effects; see Troubleshooting for the key considerations.
@@ -105,6 +106,10 @@ devtools::install_github("microsud/microbiomeutilities")
 # OPTIONAL — mixed models, only for non-independent designs (repeated measures,
 # co-housed, nested). Skip this line if your samples are independent.
 install.packages(c("lme4", "lmerTest", "emmeans", "broom", "broom.mixed"))
+
+# OPTIONAL — co-occurrence networks (Section 12). SpiecEasi is GitHub-only.
+install.packages(c("igraph", "ggraph", "tidygraph"))
+devtools::install_github("zdk123/SpiecEasi")
 
 # Load all libraries up front
 library(tidyverse)
@@ -1043,7 +1048,7 @@ How our tools handle it:
 - **MaAsLin2** fits linear models on log-transformed relative abundances with TSS. This does not fully solve compositionality theoretically, but in practice gives comparable results and is flexible for complex designs.
 - **ALDEx2** uses Monte Carlo sampling from a Dirichlet posterior and applies CLR to each draw.
 
-Compositionality matters most when (a) testing differential abundance, (b) correlating taxa (use SparCC or SPIEC-EASI, not Pearson/Spearman on proportions), and (c) when a few dominant taxa change sharply. It matters less for alpha diversity, compositionally aware ordinations (Aitchison), and taxonomy barplots.
+Compositionality matters most when (a) testing differential abundance, (b) correlating taxa (use SparCC or SPIEC-EASI, not Pearson/Spearman on proportions — Section 12 demonstrates SPIEC-EASI), and (c) when a few dominant taxa change sharply. It matters less for alpha diversity, compositionally aware ordinations (Aitchison), and taxonomy barplots.
 
 **Our approach:** Bray-Curtis for continuity with the ecological literature plus Aitchison as the compositionally correct complement; for differential abundance, run ANCOM-BC2 and MaAsLin2 and report the consensus.
 
@@ -1244,7 +1249,73 @@ Correcting on the filtered subset is the more tempting of the two, because the c
 
 *Expected output. The strongest indicator taxa (IndVal.g, FDR < 0.05), coloured by the group they characterise. In the example 1,399 of 4,081 taxa pass FDR; a high IndVal combines being concentrated in a group and present across its samples.*
 
-## **12. Figures and Reproducibility**
+## **12. Co-occurrence Networks (optional)**
+
+A **co-occurrence network** shows which taxa rise and fall together across samples. Nodes are taxa; an edge joins two that are associated — positively (they co-occur) or negatively (one tends to replace the other). It is a map of community structure, not of proven interactions.
+
+**Do not build one by correlating relative abundances.** Because proportions sum to 1, one taxon rising forces the rest down, so Pearson or Spearman on proportions manufactures negative associations that are artefacts of the constraint rather than biology.
+
+We use **SPIEC-EASI** (Kurtz et al. 2015) instead. It CLR-transforms the counts first — the same compositional fix as Aitchison distance — then infers a *conditional* dependency graph: an edge means two taxa are associated after accounting for every other taxon, rather than by a head-to-head correlation. It picks the network's sparsity by StARS stability selection instead of an arbitrary threshold, so the result is reproducible.
+
+This step is optional and needs three extra packages from Section 2, one GitHub-only (`SpiecEasi`). Work at genus level and keep the most prevalent genera: stable inference needs more samples than taxa, so a smaller, readable set is both faster and sounder.
+
+```r
+library(SpiecEasi); library(igraph); library(ggraph); library(tidygraph)
+set.seed(42)
+
+# Genus level; keep the most prevalent genera for a tractable, stable network.
+ps_g <- tax_glom(ps_raw, taxrank = "genus", NArm = TRUE)
+taxa_names(ps_g) <- make.unique(as.character(tax_table(ps_g)[, "genus"]))
+prev <- rowSums(as(otu_table(ps_g), "matrix") > 0)
+keep <- names(sort(prev, decreasing = TRUE))[seq_len(min(50, ntaxa(ps_g)))]
+ps_net <- prune_taxa(keep, ps_g)
+
+# samples x taxa. Give SPIEC-EASI counts, not proportions — it CLR's internally.
+otu <- t(as(otu_table(ps_net), "matrix"))
+se  <- spiec.easi(otu, method = "mb", lambda.min.ratio = 1e-2, nlambda = 20,
+                  pulsar.params = list(rep.num = 20, seed = 42))
+
+# Fitted associations -> weighted, undirected graph; drop isolated nodes.
+beta <- as.matrix(SpiecEasi::symBeta(SpiecEasi::getOptBeta(se), mode = "maxabs"))
+rownames(beta) <- colnames(beta) <- colnames(otu)
+g <- graph_from_adjacency_matrix(beta, mode = "undirected", weighted = TRUE, diag = FALSE)
+g <- delete_vertices(g, igraph::degree(g) == 0)
+```
+
+**How long.** SPIEC-EASI refits the model many times for stability selection (`rep.num = 20`), so after the Bioconductor install it is the slowest step here — a few minutes on 50 taxa × 20 samples, and longer as either grows.
+
+Confirm the network is not empty before plotting:
+
+```r
+npos <- sum(E(g)$weight > 0); nneg <- sum(E(g)$weight < 0)
+cat(sprintf("nodes %d, edges %d (%d+/%d-), density %.3f\n",
+            vcount(g), ecount(g), npos, nneg, edge_density(g)))
+```
+
+> **Expect** a connected network — on the example data, **50 nodes and 68 edges (63 positive, 5 negative), density 0.056**. **Zero edges** means the sparsity penalty is too high or you have too few samples: lower `lambda.min.ratio`, or gather more samples before trusting the structure.
+
+Plot it, colouring edges by sign and sizing nodes by degree — the number of associations a taxon has, so high-degree "hub" taxa are the most connected:
+
+```r
+V(g)$deg    <- igraph::degree(g)
+E(g)$sign   <- ifelse(E(g)$weight > 0, "positive", "negative")
+E(g)$weight <- abs(E(g)$weight)                 # layout needs positive edge strengths
+
+ggraph(as_tbl_graph(g), layout = "fr") +
+  geom_edge_link(aes(colour = sign), width = 0.4, alpha = 0.6) +
+  geom_node_point(aes(size = deg), shape = 21, fill = "grey70", colour = "grey20") +
+  scale_edge_colour_manual(values = c(positive = "#0072B2", negative = "#D55E00")) +
+  labs(edge_colour = "Association", size = "Degree") +
+  theme_void()
+```
+
+The saved figure below additionally colours nodes by phylum and labels the hub genera; that styling is in `examples/r_analysis/run_example.R`.
+
+![SPIEC-EASI co-occurrence network](examples/r_analysis/figures/15_spieceasi_network.png)
+
+*Expected output. The 50 most prevalent genera, coloured by phylum and sized by degree; edges are SPIEC-EASI associations (blue positive, orange negative) with the ten hubs labelled. Read it as which taxa move together, not as proof of interaction — with n = 20 spanning three environments, many edges partly reflect shared habitat rather than direct ecology.*
+
+## **13. Figures and Reproducibility**
 
 ### **Figures**
 
@@ -1313,6 +1384,7 @@ The primary literature behind the method choices in this document. Record your o
 | Rarefaction re-evaluated (for) | Schloss 2024, *mSphere* 9(1):e00355-23, and the companion 9(2):e00354-23 |
 | DA-method benchmarking | Nearing et al. 2022, *Nature Communications* 13:342 |
 | Indicator species / IndVal | Dufrêne & Legendre 1997, *Ecological Monographs* 67(3):345-366 |
+| Co-occurrence networks (SPIEC-EASI) | Kurtz et al. 2015, *PLoS Computational Biology* 11(5):e1004226 |
 
 ### **Appendix B: Normalisation Methods**
 

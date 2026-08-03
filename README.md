@@ -11,7 +11,7 @@ Standard operating procedures for microbial community analysis on [NeSI](https:/
 | Short-read 16S amplicons, Illumina (V3–V4, 341F–785R) | Not yet covered — you need a DADA2 or similar ASV workflow | `SOP_R_Analysis.md` applies once you have a count table |
 | Shotgun metagenomes, read-based profiling, human-associated samples | `SOP_READBASED_NeSI.md` | `SOP_R_Analysis.md`, with the deltas in that SOP's Section 13 |
 | Shotgun metagenomes, read-based profiling, animal or environmental samples | Not covered — MetaPhlAn's marker genes are built for human-associated taxa | — |
-| Shotgun metagenomes, assembly and binning into MAGs | Not covered — see the [Genomics Aotearoa Metagenomics Summer School](https://genomicsaotearoa.github.io/metagenomics_summer_school/) | — |
+| Shotgun metagenomes, assembly and binning into MAGs | `SOP_READBASED_NeSI.md` Sections 1–8 for clean reads, then `SOP_ASSEMBLY_NeSI.md` | `SOP_R_Analysis.md`, with the deltas in `SOP_ASSEMBLY_NeSI.md` Section 15 |
 
 **Amplicon** means you PCR-amplified one gene (16S) and sequenced only that; **shotgun** means you sequenced all DNA without targeting a gene. **Read-based** profiles reads directly against reference databases with no assembly step — faster and works on lower-coverage data, but it finds only organisms and genes already in the databases and recovers no novel genomes (for those, you want assembly and binning).
 
@@ -25,6 +25,7 @@ Standard operating procedures for microbial community analysis on [NeSI](https:/
 | [`SOP_R_Analysis.md`](SOP_R_Analysis.md) | **Part 2 — count tables → results.** phyloseq, decontam, SRS normalisation, alpha/beta diversity, PERMANOVA, differential abundance (ANCOM-BC2 and MaAsLin2, ALDEx2 noted), indicator species, common pitfalls. Platform-agnostic; runs locally in R. |
 | [`SOP_CONCOMPRA_NeSI.md`](SOP_CONCOMPRA_NeSI.md) | **Runs after Part 1, same Nanopore data.** Reference-free consensus OTUs alongside Emu's assignments: install, dedup, run configuration, submission, verification, then SINTAX taxonomy, MAFFT alignment, FastTree phylogeny. Takes Part 1's filtered reads as input and hands off to Part 2. |
 | [`SOP_READBASED_NeSI.md`](SOP_READBASED_NeSI.md) | **Illumina shotgun, read-based.** Governance and controls, trimming and PhiX removal, host depletion against T2T-CHM13, depth gates, taxonomy (MetaPhlAn 4), function (HUMAnN), contamination screening, and what changes in Part 2 for compositional input. Does not re-teach the cluster — it points first-timers back to Part 1 Section 1. |
+| [`SOP_ASSEMBLY_NeSI.md`](SOP_ASSEMBLY_NeSI.md) | **Illumina shotgun, assembly-based.** Takes the read-based SOP's clean, host-depleted reads and reconstructs genomes: assembly (MEGAHIT/metaSPAdes), coverage mapping, binning (MetaBAT2, MaxBin2, CONCOCT) with DAS_Tool refinement, MAG quality (CheckM2, MIMAG tiers), dereplication (dRep), taxonomy (GTDB-Tk), annotation (Bakta; eggNOG/DRAM optional), and a MAG × sample abundance table. Hands off to Part 2 with compositional deltas (its Section 15). |
 
 **Part 2 is platform-agnostic** — one R document, not one per platform. Once you have a count table, a taxonomy table and a metadata file, the R workflow is identical whether the reads were profiled with Emu, CONCOMPRA or MetaPhlAn; only the interpretation differs (Part 1 covers this under "Full-length vs short-read"; the read-based SOP's Section 13 lists what changes when the input is relative abundance rather than counts).
 
@@ -65,6 +66,23 @@ The NeSI modules these SOPs were written against, confirmed present on Mahuika i
 | Hostile | conda, via `Miniforge3/25.3.1-0` | Host depletion against a masked human index |
 
 HUMAnN is deliberately **not** taken from a module — NeSI's `Humann/3.0.0.alpha.3` module is a 2020 pre-release that predates every MetaPhlAn 4 database and must not be used with this workflow.
+
+**Shotgun, assembly (MAGs):**
+
+| Tool | Module string | Purpose |
+| --- | --- | --- |
+| MEGAHIT | `MEGAHIT/1.2.9-gimkl-2022a-Python-3.10.5` | Assembly (default) |
+| SPAdes (metaSPAdes) | `SPAdes/4.0.0-foss-2023a-Python-3.11.6` | Assembly (alternative), `spades.py --meta` |
+| QUAST (metaQUAST) | `QUAST/5.2.0-gimkl-2022a` | Assembly QC |
+| MetaBAT2 / MaxBin2 / CONCOCT | `MetaBAT/2.17-GCC-12.3.0`, `MaxBin/2.2.7-GCC-11.3.0-Perl-5.34.1`, `CONCOCT/1.1.0-gimkl-2020a-Python-3.8.2` | Binning |
+| DAS_Tool | `DAS_Tool/1.1.5-gimkl-2022a-R-4.2.1` | Bin refinement |
+| CheckM2 | `CheckM2/1.0.1-Miniconda3` | MAG completeness/contamination |
+| dRep | `drep/3.4.2-gimkl-2022a-Python-3.10.5` | Dereplication |
+| GTDB-Tk | `GTDB-Tk/2.7.1-foss-2023a-Python-3.11.6` | Taxonomy (GTDB R232) |
+| Bakta | `bakta/1.10.1-foss-2023a` | Annotation |
+| CoverM | `CoverM/0.7.0-GCC-12.3.0` | MAG × sample abundance |
+
+GTDB-Tk, CheckM2, Bakta, eggNOG-mapper (`eggnog-mapper/2.1.12-gimkl-2022a`) and DRAM (`DRAM/1.3.5-Miniconda3`) resolve their large reference databases from NeSI's central `/opt/nesi/db` — nothing to download.
 
 Reference databases: SILVA v138.1 and RDP for the amplicon work, via Emu's prebuilt OSF archives. Part 1 explains why we use the validated v138.1 build rather than the newer SILVA 138.2 archive, and why we run both databases and compare. The read-based SOP pins the MetaPhlAn index explicitly (`mpa_vJun23_CHOCOPhlAnSGB_202403`) and explains why an unpinned index makes results depend on when the database was last refreshed.
 

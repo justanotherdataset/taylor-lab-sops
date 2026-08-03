@@ -6,9 +6,11 @@
 
 This document takes Illumina shotgun reads to taxonomic and functional profiles without assembling anything. Reads are matched directly against reference databases: MetaPhlAn 4 for taxonomy, HUMAnN for gene families and pathways. The statistics then run on `SOP_R_Analysis.md`, with Section 13 below listing what changes because the input is relative abundance rather than counts.
 
+Illumina sequences each fragment from both ends, so every sample arrives as two files — `_R1` and `_R2` — whose paired reads are called *mates*; the workflow keeps or discards the two together throughout.
+
 **This SOP is for human-associated samples** — gut, skin, oral, nasal, respiratory. MetaPhlAn's marker genes are built from human-associated taxa, so the workflow does not transfer to animal or environmental samples. If you need novel genomes rather than a profile of known ones, you need assembly and binning, which this repo does not cover; see the [Genomics Aotearoa Metagenomics Summer School](https://genomicsaotearoa.github.io/metagenomics_summer_school/).
 
-**It assumes you have already run one pipeline on NeSI.** Bash, modules, `sbatch` and array jobs are taken as familiar. If they are not, work through `SOP_EMU_NeSI.md` Section 1 first.
+**This SOP does not re-teach the cluster.** It uses bash, modules, `sbatch` and array jobs without explaining them. If you have not used them, work through `SOP_EMU_NeSI.md` Sections 1–2 first — Section 1 starts from `pwd` and teaches the cluster with no command-line experience assumed, and Section 2 covers the data concepts (FASTQ files, quality scores).
 
 ---
 
@@ -53,7 +55,7 @@ Treat host-depleted FASTQ files as controlled-access data unless your ethics app
 
 ### **Controls**
 
-Controls are collected at the bench and cannot be added later. Aim for at least one control per four samples, sequenced in the same run and listed in `samples.txt` alongside the real samples. They are mandatory for skin, nasal, BAL and any other low-biomass sample type, because contamination screening (Section 12) is impossible without them.
+Controls are collected at the bench and cannot be added later. Aim for at least one control per four samples, sequenced in the same run and listed in `samples.txt` alongside the real samples. They are mandatory for skin, nasal, BAL (bronchoalveolar lavage, a saline wash of the lung) and any other low-biomass sample type, because contamination screening (Section 12) is impossible without them.
 
 | Control | What it catches |
 | --- | --- |
@@ -89,7 +91,7 @@ Take the host fraction from the table in Section 7 and use 0.85 for trim surviva
 | Oral, saliva, vaginal | 0.90 | 5 000 000 ÷ 0.10 ÷ 0.85 ≈ **59 million** |
 | BAL, no wet-lab depletion | 0.997 | 5 000 000 ÷ 0.003 ÷ 0.85 ≈ **2 billion** |
 
-Divide, do not multiply. Multiplying by the host fraction shrinks the order, and shrinks it most at exactly the sites that need the largest increase — which is the easiest way to arrive at a whole run where every sample fails the depth gate in Section 8.
+Divide, do not multiply. Multiplying by the host fraction shrinks the order, and shrinks it most at exactly the sites that need the largest increase — which is the surest way to arrive at a whole run where every sample fails the depth gate in Section 8.
 
 The BAL row is not a typo. It is why Section 7 says that at high-host sites wet-lab depletion at the bench achieves far more than any amount of extra sequencing.
 
@@ -136,7 +138,7 @@ The databases will not fit anywhere else: the MetaPhlAn index is 25–30 GB, the
 
 ## **3. Setup**
 
-### **3.1 Directories and the sample manifest**
+### **3.1 Directories and the Sample Manifest**
 
 ```bash
 ACCOUNT=<your_nesi_project_code>        # as set in Section 2
@@ -155,13 +157,15 @@ done < samples.txt
 NSAMP=$(wc -l < samples.txt); echo "samples: $NSAMP"
 ```
 
+> **Expect** `$NSAMP` to equal the number of samples you sequenced. More than that usually means a stray file matched the `raw/*_R1.fastq.gz` glob; fewer means a pair is missing — check the `INCOMPLETE PAIR` lines the loop printed before you go on.
+
 The `sed` line is not decoration. A manifest edited on Windows carries carriage returns, and a trailing blank line produces an empty `$SAMPLE` — both give you array tasks that fail in confusing ways much later.
 
 Adjust the filename pattern to match your data. For Illumina's `<sample>_S1_L001_R1_001.fastq.gz` convention, concatenate lanes first, then simplify the names.
 
 Two constraints to note now:
 
-- **Submit every job from `$WORK`.** All paths in this SOP are relative to it, and `logs/` must exist before your first `sbatch` or SLURM fails without telling you why.
+- **Create `logs/` before your first `sbatch`.** Every header below sets `--chdir` to `$WORK`, so all relative paths and log files resolve there no matter which directory you submit from — but the `logs/` directory must already exist, or SLURM fails without telling you why. The `mkdir -p` above already creates it.
 - **NeSI caps job arrays at 1000 tasks.** Larger cohorts need to be split.
 
 ### **3.2 Modules**
@@ -172,7 +176,7 @@ Verify these with `module spider` before you rely on them, capitalisation includ
 
 **Do not use the `Humann/3.0.0.alpha.3` module.** Section 10 explains why.
 
-### **3.3 References and databases**
+### **3.3 References and Databases**
 
 One-time setup, on the login node; both downloads are large, so start them before you need them. The MetaPhlAn index is **always** needed. The chm13 human reference is **only for host-depletion Option B (BBMap)** — skip it if you are using Hostile (Option A, the recommended path in Section 7), which fetches its own masked index.
 
@@ -192,45 +196,44 @@ md5sum chm13v2.0.fa.gz | tee chm13v2.0.fa.gz.md5   # records provenance (Section
                                                    # checksum published with the file
 ```
 
-Pin the MetaPhlAn index rather than accepting the default. Section 9 explains what an unpinned index does to reproducibility.
+**How long:** 2–4 hours for the two downloads combined. Run them before you need them, not on the day you want to profile.
+
+**We pin** the MetaPhlAn index rather than accepting the default. Section 9 explains what an unpinned index does to reproducibility.
 
 ---
 
 ## **4. The Standard Job Header**
 
-Every script in this SOP uses the header below. Only the job name and the resource requests change, and Appendix C lists those per script. The script bodies in later sections are shown without it — add it yourself.
+Every script below carries the complete job header — shebang, `#SBATCH` directives, and `set -euo pipefail` — so you can copy a block, substitute the placeholders, and submit it. The per-script resource values (`--time`, `--mem`, `--cpus-per-task`) are collected in Appendix C. Each header sets `--chdir /nesi/nobackup/<your_nesi_project_code>/readbased`, so `logs/` and every relative path resolve there no matter which directory you run `sbatch` from.
 
-```bash
-#!/bin/bash
-#SBATCH --account <your_nesi_project_code>
-#SBATCH --job-name <name>
-#SBATCH --time <t>                       # }
-#SBATCH --mem <m>                        # }  Appendix C
-#SBATCH --cpus-per-task <c>              # }
-#SBATCH --array=1-1                      # array jobs only - placeholder, see below
-#SBATCH --output logs/%x_%A_%a.out       # %x_%j.out for non-array jobs
+**Set the real array size at submission**, not in the script. The array scripts carry no `#SBATCH --array` line, so you add the range when you submit: `sbatch --array=1-${NSAMP}%20 scripts/06.trim.sl`. Leaving it out is the mistake most often made in this SOP — but without a range the job fails loudly on an unset `${SLURM_ARRAY_TASK_ID}` under `set -u`, rather than silently running sample 1 only.
 
-set -euo pipefail
-cd "${SLURM_SUBMIT_DIR:?}"
-
-# array jobs only:
-SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
-[[ -n "$SAMPLE" ]] || { echo "empty sample at ${SLURM_ARRAY_TASK_ID}"; exit 1; }
-```
-
-**Set the real array size at submission**, not in the script: `sbatch --array=1-${NSAMP}%20` overrides the placeholder. This is the single easiest mistake to make in this SOP — forget it and the job runs successfully on sample 1 only, with no error to alert you. Check the task count in `squeue` after submitting. The account can be overridden the same way, with `sbatch --account=$ACCOUNT`.
-
-The `%20` suffix throttles the array to 20 concurrent tasks, which keeps you from filling the queue.
+The `%20` suffix throttles the array to 20 concurrent tasks, which keeps you from filling the queue; HUMAnN throttles harder, to `%10`.
 
 ---
 
 ## **5. Quality Control**
 
-You run QC twice, on the raw reads and again after trimming, using one parameterised script for both.
+**Quality control** tells you whether your reads are good enough to trust before you spend compute on them. **FastQC** scans each FASTQ file and reports per-base quality, adapter contamination, GC content and over-represented sequences; **MultiQC** gathers every sample's FastQC output into one report you can read across the cohort. You run QC twice — on the raw reads and again after trimming — so you can see what trimming changed, using one parameterised script for both.
 
 `scripts/05a.qc_fastqc.sl` (array job):
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name qc_fastqc
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 00:30:00
+#SBATCH --mem 4G
+#SBATCH --cpus-per-task 2
+#SBATCH --output logs/%x_%A_%a.out
+#SBATCH --error  logs/%x_%A_%a.err
+# array range set at submission: sbatch --array=1-${NSAMP}%20 scripts/05a.qc_fastqc.sl raw qc/raw
+
+set -euo pipefail
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
+[[ -n "$SAMPLE" ]] || { echo "empty sample at ${SLURM_ARRAY_TASK_ID}"; exit 1; }
+
 IN=${1:?usage: sbatch 05a.qc_fastqc.sl <indir> <outdir>}; OUT=${2:?}
 module purge; module load FastQC/0.12.1
 fastqc -t 2 -o "$OUT" "$IN/${SAMPLE}_R1.fastq.gz" "$IN/${SAMPLE}_R2.fastq.gz"
@@ -239,6 +242,18 @@ fastqc -t 2 -o "$OUT" "$IN/${SAMPLE}_R1.fastq.gz" "$IN/${SAMPLE}_R2.fastq.gz"
 `scripts/05b.qc_multiqc.sl`:
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name qc_multiqc
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 00:20:00
+#SBATCH --mem 4G
+#SBATCH --cpus-per-task 1
+#SBATCH --output logs/%x_%j.out
+#SBATCH --error  logs/%x_%j.err
+
+set -euo pipefail
+
 module purge; module load MultiQC/1.24.1-foss-2023a-Python-3.11.6
 multiqc -f -o "${1:?}_report" "${1:?}"
 ```
@@ -249,13 +264,23 @@ A few things worth knowing:
 - **MultiQC writes to a sibling directory**: input `qc/raw` produces `qc/raw_report`.
 - **MultiQC must be a dependent job.** Submit it with `--dependency=afterok` (Appendix A). Submitted alongside the FastQC array instead, it runs immediately, reports on however few samples happen to have finished, and exits 0 — leaving you a report that looks fine and is silently incomplete.
 
-### **Reading the reports**
+**How long:** FastQC about 30 minutes across the cohort, MultiQC about 20 minutes.
+
+After MultiQC finishes, confirm the report exists:
+
+```bash
+ls qc/raw_report/multiqc_report.html
+```
+
+> **Missing** means MultiQC ran before the FastQC array finished — resubmit it with `--dependency=afterok` (Appendix A).
+
+### **Reading the Reports**
 
 Several FastQC modules fail reliably on metagenomes and can be ignored: GC content, duplication levels, and overrepresented sequences. A metagenome is a mixture of organisms with different GC contents, so a single-genome expectation does not apply.
 
 What does matter: adapter content, any collapse in quality towards the read ends, poly-G tails, and samples with unusually low read counts. After trimming, expect adapter content at zero, poly-G gone, and more than 80% of reads surviving.
 
-### **Identify your chemistry now**
+### **Identify Your Chemistry Now**
 
 Section 6 branches on this, so settle it before you trim. Check the instrument ID in the read headers, or look for poly-G in the overrepresented sequences:
 
@@ -269,11 +294,30 @@ NovaSeq and NextSeq are two-colour instruments and produce poly-G artefacts. HiS
 
 ## **6. Trimming and PhiX Removal**
 
+Sequencing does not stop cleanly at the end of your DNA fragment. When a fragment is shorter than the read, the machine reads on into the **adapter** — the short synthetic sequence that library prep attached to every fragment so it would bind the flow cell — and those bases are not biology. **Adapter trimming** finds and removes them.
+
+Illumina also spikes every run with **PhiX**, a small bacteriophage genome used as a sequencing-quality control; its reads are real DNA but not part of your sample, so they must be removed too. This section does both with **BBDuk** (part of the BBMap package): trim adapters in the first pass, filter PhiX in the second. `ktrim=r` below means "trim the matched k-mer and everything to its right".
+
 This runs as **two passes, and they cannot be combined into one.** The reason is that `ktrim=r` applies to every sequence in `ref=`. Listing PhiX alongside the adapters would therefore *truncate* PhiX-contaminated reads and keep the remainder, rather than discarding them. BBDuk's default behaviour with no `ktrim` is to filter whole reads, which is what you want for PhiX. So: trim adapters in pass one, filter PhiX in pass two.
 
 `scripts/06.trim.sl` (array job):
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name trim
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 02:00:00
+#SBATCH --mem 16G
+#SBATCH --cpus-per-task 12
+#SBATCH --output logs/%x_%A_%a.out
+#SBATCH --error  logs/%x_%A_%a.err
+# array range set at submission: sbatch --array=1-${NSAMP}%20 scripts/06.trim.sl
+
+set -euo pipefail
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
+[[ -n "$SAMPLE" ]] || { echo "empty sample at ${SLURM_ARRAY_TASK_ID}"; exit 1; }
+
 module purge; module load BBMap/39.01-GCC-11.3.0
 HALF=$(( SLURM_CPUS_PER_TASK / 2 ))   # two JVMs run CONCURRENTLY in the pipe: halve
                                       # both heap and threads or you OOM/oversubscribe
@@ -296,17 +340,34 @@ Notes on the parameters:
 - **Do not deduplicate.** In a low-complexity community, duplicate reads from a dominant taxon are usually genuine, and removing them distorts abundance.
 - Optional additions: `outs=` retains singletons, and `entropy=0.90 entropywindow=50` drops low-complexity reads.
 
-### **Two-colour chemistry: poly-G**
+**How long:** about 2 hours per sample. The after-trimming QC in Section 5 is your checkpoint — adapter content should read zero and more than 80% of reads should survive.
+
+### **Two-Colour Chemistry: Poly-G**
 
 Two-colour instruments read an absent signal as G, producing poly-G tails. Add `trimpolygright=8` to the pass-one call above. BBDuk has carried the `trimpolyg*` flags since version 38.21, so the pinned 39.01 module supports them.
 
-Releases 39.09 and 39.10 improved the trimmer to tolerate poly-G runs interrupted by the occasional non-G base. Version 39.01 catches clean runs only, so prefer a newer BBMap if `module spider BBMap` offers one.
+Version 39.01 (the newest BBMap on the cluster) catches clean poly-G runs. If your two-colour data has poly-G runs interrupted by the occasional non-G base, use the fastp alternative below, whose `--trim_poly_g` handles interrupted runs.
 
-### **Alternative: fastp for pass one**
+### **Alternative: fastp for Pass One**
 
-fastp is a reasonable substitute for the first pass. It detects adapters without a reference and produces a better report. It replaces **pass one only** — PhiX filtering still has to happen afterwards.
+fastp is a reasonable substitute for the first pass. It detects adapters without a reference and produces a better report. It replaces **pass one only** — PhiX filtering still has to happen afterwards, so the script below runs fastp then BBDuk in turn.
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name trim
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 02:00:00
+#SBATCH --mem 16G
+#SBATCH --cpus-per-task 12
+#SBATCH --output logs/%x_%A_%a.out
+#SBATCH --error  logs/%x_%A_%a.err
+# array range set at submission: sbatch --array=1-${NSAMP}%20 scripts/06.trim.sl
+
+set -euo pipefail
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
+[[ -n "$SAMPLE" ]] || { echo "empty sample at ${SLURM_ARRAY_TASK_ID}"; exit 1; }
+
 module purge; module load fastp/0.23.4-GCC-11.3.0
 fastp -i "raw/${SAMPLE}_R1.fastq.gz" -I "raw/${SAMPLE}_R2.fastq.gz" \
       -o "trim/${SAMPLE}_R1.tmp.fastq.gz" -O "trim/${SAMPLE}_R2.tmp.fastq.gz" \
@@ -325,7 +386,7 @@ bbduk.sh in1="trim/${SAMPLE}_R1.tmp.fastq.gz" in2="trim/${SAMPLE}_R2.tmp.fastq.g
 rm -f "trim/${SAMPLE}_R1.tmp.fastq.gz" "trim/${SAMPLE}_R2.tmp.fastq.gz"
 ```
 
-MultiQC parses fastp's JSON, so Section 5 still gives you a single report either way.
+**How long:** about 2 hours per sample, as for the BBDuk-only route. MultiQC parses fastp's JSON, so Section 5 still gives you a single report either way.
 
 ---
 
@@ -335,17 +396,17 @@ The rule is simple: keep a read pair only if **neither** mate maps to the human 
 
 ### **Why T2T-CHM13v2.0**
 
-Not for raw sensitivity — the per-read gain over hg38 is a fraction of a percentage point. The reason is false positives. T2T-CHM13v2.0 adds roughly 200 Mb of centromeric, segmental and satellite sequence that hg38 lacks. Human reads from those regions have nowhere to map in hg38, so they misalign to microbial references and appear as species that were never in your sample. A more complete human reference captures them.
+**We deplete against T2T-CHM13v2.0**, not hg38 — not for raw sensitivity, where the per-read gain is a fraction of a percentage point, but for false positives. T2T-CHM13v2.0 adds roughly 200 Mb of centromeric, segmental and satellite sequence that hg38 lacks. Human reads from those regions have nowhere to map in hg38, so they misalign to microbial references and appear as species that were never in your sample. A more complete human reference captures them.
 
 Take the effect size from a benchmark rather than from this SOP: *Telomere-to-Telomere Assembly Improves Host Reads Removal in Metagenomic High-Throughput Sequencing of Human Samples* (bioRxiv 2023.05.05.539517), and *Use of the CHM13-T2T genome improves metagenomic analysis by minimizing host DNA contamination* (*mSystems*, 2025).
 
-### **Why the reference must be masked**
+### **Why the Reference Must Be Masked**
 
 An unmasked human reference deletes genuine microbial reads, because rRNA genes, conserved regions and low-complexity repeats are shared between human and microbial sequence. Masking those regions is what stops it. This matters for Option B below, whose parameters come from JGI's recipe and assume a masked reference.
 
-### **Option A — masked index via Hostile (recommended)**
+### **Option A — Masked Index via Hostile (Recommended)**
 
-One-time setup on the login node:
+**We default to** Hostile because it fetches its own masked index, so you never build or store the human reference yourself. **Hostile** is not a NeSI module, so you install it with **conda** — a package manager that, as an alternative to `module load`, installs tools into a named *environment* you activate when you need it. Set it up once on the login node:
 
 ```bash
 module load Miniforge3/25.3.1-0
@@ -358,6 +419,21 @@ export HOSTILE_CACHE_DIR=$DB/hostile; hostile fetch --name human-t2t-hla-argos98
 `scripts/07.host_hostile.sl` (array job):
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name host_hostile
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 01:00:00
+#SBATCH --mem 24G
+#SBATCH --cpus-per-task 16
+#SBATCH --output logs/%x_%A_%a.out
+#SBATCH --error  logs/%x_%A_%a.err
+# array range set at submission: sbatch --array=1-${NSAMP}%20 scripts/07.host_hostile.sl
+
+set -euo pipefail
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
+[[ -n "$SAMPLE" ]] || { echo "empty sample at ${SLURM_ARRAY_TASK_ID}"; exit 1; }
+
 module purge; module load Miniforge3/25.3.1-0
 source "$(conda info --base)/etc/profile.d/conda.sh"; conda activate hostile
 export HOSTILE_CACHE_DIR=/nesi/nobackup/<your_nesi_project_code>/db/hostile
@@ -371,15 +447,33 @@ mv "clean/${SAMPLE}_R1.clean_1.fastq.gz" "clean/${SAMPLE}_R1.fastq.gz"
 mv "clean/${SAMPLE}_R2.clean_2.fastq.gz" "clean/${SAMPLE}_R2.fastq.gz"
 ```
 
-Hostile's output filenames have changed between versions, so run a single sample and check what actually landed in `clean/` before launching the full array.
+**How long:** about 1 hour per sample. Run a single sample first and check what actually landed in `clean/`:
 
-### **Option B — modules only, BBMap against unmasked T2T**
+```bash
+ls -l "clean/${SAMPLE}_R1.fastq.gz" "clean/${SAMPLE}_R2.fastq.gz"
+```
+
+> **Both present and non-empty** means depletion worked and the `mv` lines matched. **Missing** almost always means Hostile's output filenames differ in your version — Hostile's naming has changed between versions, so `ls clean/` and fix the two `mv` lines before launching the full array.
+
+### **Option B — Modules Only, BBMap Against Unmasked T2T**
 
 Use this only if you cannot install Hostile, and only if two conditions hold: you have a mock community (Section 1) to quantify how much microbial signal you lose, and your methods section states that the reference was unmasked.
 
 `scripts/07a.host_index.sl` (no array). The filter must not start until this finishes — see Appendix A:
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name host_index
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 01:00:00
+#SBATCH --mem 36G
+#SBATCH --cpus-per-task 12
+#SBATCH --output logs/%x_%j.out
+#SBATCH --error  logs/%x_%j.err
+
+set -euo pipefail
+
 module purge; module load BBMap/39.01-GCC-11.3.0
 DB=/nesi/nobackup/<your_nesi_project_code>/db   # batch jobs do not inherit your login shell; define it here (as in Section 9)
 cd "$DB/human"
@@ -389,6 +483,21 @@ bbmap.sh ref=chm13v2.0.fa.gz threads=${SLURM_CPUS_PER_TASK} -Xmx30g
 `scripts/07b.host_filter.sl` (array job):
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name host_filter
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 01:00:00
+#SBATCH --mem 32G
+#SBATCH --cpus-per-task 20
+#SBATCH --output logs/%x_%A_%a.out
+#SBATCH --error  logs/%x_%A_%a.err
+# array range set at submission: sbatch --array=1-${NSAMP}%20 scripts/07b.host_filter.sl
+
+set -euo pipefail
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
+[[ -n "$SAMPLE" ]] || { echo "empty sample at ${SLURM_ARRAY_TASK_ID}"; exit 1; }
+
 module purge; module load BBMap/39.01-GCC-11.3.0
 DB=/nesi/nobackup/<your_nesi_project_code>/db   # batch jobs do not inherit your login shell; define it here (as in Section 9)
 bbmap.sh -Xmx26g threads=${SLURM_CPUS_PER_TASK} \
@@ -404,11 +513,13 @@ Three details that cause real failures:
 
 - The parameter is `threads=`, not `-t=`.
 - `path=` takes the directory *containing* the auto-generated `ref/` subdirectory, not `ref/` itself.
-- `outu` excludes an unmapped read whose mate mapped. That is the behaviour you want — if either mate hits human, both go — but it means clean is not simply raw minus host when you reconcile the numbers in Section 8.
+- `outu` excludes an unmapped read whose mate mapped. That is the behaviour you want — if either mate hits human, both go — but it means clean is not raw minus host when you reconcile the numbers in Section 8.
 
 Keep `-Xmx26g` under a 32 GB allocation. The JVM's overhead sits outside the heap, so a tighter margin gets the job OOM-killed partway through an array.
 
-### **Expected host fraction by site**
+**How long:** indexing about 1 hour, run once; filtering about 1 hour per sample.
+
+### **Expected Host Fraction by Site**
 
 | Site | Typical host fraction |
 | --- | --- |
@@ -428,6 +539,18 @@ Run this as a job. NeSI terminates long-running processes on login nodes, and co
 `scripts/08.read_counts.sl` (no array):
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name read_counts
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 02:00:00
+#SBATCH --mem 4G
+#SBATCH --cpus-per-task 1
+#SBATCH --output logs/%x_%j.out
+#SBATCH --error  logs/%x_%j.err
+
+set -euo pipefail
+
 OUT=tables/read_counts.tsv
 printf "sample\traw_pairs\ttrim_pairs\tclean_pairs\ttrim_frac\thost_frac\n" > "$OUT"
 
@@ -450,7 +573,9 @@ done < samples.txt
 
 These are read **pairs**, not reads. One million pairs is roughly 0.3 Gb of sequence at 2×150, which is the conversion behind every figure in Section 1.
 
-### **The gates**
+**How long:** about 1–2 hours across the cohort.
+
+### **The Gates**
 
 | Condition | What to do |
 | --- | --- |
@@ -467,13 +592,28 @@ These are read **pairs**, not reads. One million pairs is roughly 0.3 Gb of sequ
 
 ## **9. Taxonomy with MetaPhlAn 4**
 
-MetaPhlAn matches reads against clade-specific marker genes and reports composition at species and SGB level (Blanco-Míguez et al. 2023, *Nature Biotechnology*). It is not strain-level: that needs StrainPhlAn, which can reuse the `.bt2.bz2` alignment files saved below.
+MetaPhlAn matches reads against clade-specific marker genes and reports composition at species and SGB level (SGB — species-level genome bin, MetaPhlAn's genome-based unit, roughly a species including unnamed ones; Blanco-Míguez et al. 2023, *Nature Biotechnology*). It is not strain-level: that needs StrainPhlAn, which can reuse the `.bt2.bz2` alignment files saved below.
 
 Marker genes are the reason this workflow is restricted to human-associated samples: the marker set is built from human-associated taxa, so a species absent from it cannot be reported no matter how abundant it is in your data.
 
 `scripts/09.metaphlan.sl` (array job):
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name metaphlan
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 04:00:00
+#SBATCH --mem 32G
+#SBATCH --cpus-per-task 16
+#SBATCH --output logs/%x_%A_%a.out
+#SBATCH --error  logs/%x_%A_%a.err
+# array range set at submission: sbatch --array=1-${NSAMP}%20 scripts/09.metaphlan.sl
+
+set -euo pipefail
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
+[[ -n "$SAMPLE" ]] || { echo "empty sample at ${SLURM_ARRAY_TASK_ID}"; exit 1; }
+
 module purge; module load MetaPhlAn/4.1.0-gimkl-2022a-Python-3.10.5
 DB=/nesi/nobackup/<your_nesi_project_code>/db; MPA_INDEX=mpa_vJun23_CHOCOPhlAnSGB_202403
 
@@ -495,11 +635,19 @@ metaphlan "metaphlan/${SAMPLE}.bt2.bz2" \
   -t rel_ab_w_read_stats -o "metaphlan/${SAMPLE}.readstats.tsv"
 ```
 
-### **Why `--index` and `--offline` are not optional**
+**How long:** roughly 1–4 hours per sample. Confirm the profile is populated before you scale the array:
+
+```bash
+grep -c 's__' "metaphlan/${SAMPLE}.profile.tsv"
+```
+
+> **Expect** tens to a few hundred species lines for a typical gut sample. **Zero or a near-empty profile** means the reads did not map — check that `clean/${SAMPLE}_R1.fastq.gz` is non-empty and that `--index` and `--bowtie2db` point at the installed database, then re-run the task before scaling the array.
+
+### **Why `--index` and `--offline` Are Not Optional**
 
 The default index setting is `latest`, which triggers an HTTP lookup at runtime. On a compute node without internet, that either fails outright with `Cannot find a local database` or quietly falls back to a cached tag. Either way, the database a sample was profiled against would depend on when someone last ran the tool with internet access. Pinning the index is what makes the run reproducible.
 
-### **Why there are two passes**
+### **Why There Are Two Passes**
 
 Section 13's differential abundance methods need counts, and `-t rel_ab` provides none. Pass two re-reads the saved alignment to produce them, which costs almost nothing because no reads are re-mapped.
 
@@ -511,9 +659,13 @@ MetaPhlAn pools the two mates and ignores pairing, so the comma-separated input 
 
 ## **10. Function with HUMAnN**
 
-### **Install a current release**
+MetaPhlAn told you *who* is in each sample. **HUMAnN** tells you *what they can do*: it maps your reads to **gene families** (groups of related genes, here UniRef90 clusters) and reconstructs the metabolic **pathways** the community can carry out, so you can ask which functions differ between groups rather than only which species.
 
-**Do not use the `Humann/3.0.0.alpha.3` module.** It is a June 2020 pre-release, older than stable 3.0.0. It hard-targets MetaPhlAn 3.0 and ChocoPhlAn v30, which predate every MetaPhlAn 4 SGB database, ships 2019-vintage UniRef90, and has known memory bugs. Install a current release through Miniforge3 instead.
+HUMAnN reuses Section 9's taxonomic profile to choose which reference genomes to search, which is why it runs after MetaPhlAn. Its database install is large and each sample is slow, so read both subsections below before you start.
+
+### **Install a Current Release**
+
+**Do not use the `Humann/3.0.0.alpha.3` module.** It is a June 2020 pre-release, older than stable 3.0.0. It hard-targets MetaPhlAn 3.0 and ChocoPhlAn v30, which predate every MetaPhlAn 4 SGB database, ships 2019-vintage UniRef90, and has known memory bugs. Install a current release through Miniforge3 instead (conda, as introduced in Section 7).
 
 ```bash
 module load Miniforge3/25.3.1-0
@@ -533,11 +685,26 @@ srun --account=$ACCOUNT --time=04:00:00 --mem=8G --cpus-per-task=4 bash -c '
   humann_databases --download utility_mapping full    "$DB/humann" --update-config yes'
 ```
 
-### **Running it**
+### **Running It**
 
 `scripts/10.humann.sl` (array job, throttled to `%10`):
 
 ```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name humann
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/readbased
+#SBATCH --time 24:00:00
+#SBATCH --mem 48G
+#SBATCH --cpus-per-task 16
+#SBATCH --output logs/%x_%A_%a.out
+#SBATCH --error  logs/%x_%A_%a.err
+# array range set at submission: sbatch --array=1-${NSAMP}%10 scripts/10.humann.sl
+
+set -euo pipefail
+SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
+[[ -n "$SAMPLE" ]] || { echo "empty sample at ${SLURM_ARRAY_TASK_ID}"; exit 1; }
+
 module purge; module load Miniforge3/25.3.1-0
 source "$(conda info --base)/etc/profile.d/conda.sh"; conda activate humann
 
@@ -555,6 +722,14 @@ humann --input "$TMPFQ" --output "humann/${SAMPLE}" --threads ${SLURM_CPUS_PER_T
   --remove-temp-output --o-log "logs/${SAMPLE}.humann.log"
 ```
 
+**How long:** 12–24 hours per sample — the longest step in the pipeline. Do not kill it early; watch progress in `logs/${SAMPLE}.humann.log`. Confirm one sample produced both tables before launching the full array:
+
+```bash
+ls -l "humann/${SAMPLE}/${SAMPLE}_genefamilies.tsv" "humann/${SAMPLE}/${SAMPLE}_pathabundance.tsv"
+```
+
+> **Expect** both files present and non-empty. **Missing or empty** means HUMAnN found nothing to profile — usually an empty `clean/` FASTQ or a MetaPhlAn/ChocoPhlAn mismatch (the first note below). Do not launch the full array until one sample produces both.
+
 Three things to understand here:
 
 - **`--taxonomic-profile` reuses Section 9's profile**, which saves HUMAnN from running MetaPhlAn again. But first verify that your HUMAnN's ChocoPhlAn build is compatible with `$MPA_INDEX`. If it is not, drop the flag and let HUMAnN run its own MetaPhlAn — that is much better than feeding it a mismatched profile.
@@ -565,13 +740,17 @@ Three things to understand here:
 
 ## **11. Merging, Normalising and Splitting Tables**
 
+HUMAnN and MetaPhlAn hand you tables in units built for the tools, not for statistics, so this section merges every sample into one table per feature type and converts the units. **RPK** (reads per kilobase) is HUMAnN's raw output — length-corrected but not depth-corrected — so a deeper sample looks richer; **CPM** (copies per million) is the depth-normalised unit you want.
+
+**Unstratified** tables give one number per feature for the whole community; **stratified** tables break that number down by contributing species. Split the two before testing — mixing them makes the multiple-testing correction meaningless.
+
 Run this interactively:
 
 ```bash
 srun --account=$ACCOUNT --time=00:30:00 --mem=8G --cpus-per-task=2 --pty bash
 ```
 
-### **Taxonomy: relative abundance**
+### **Taxonomy: Relative Abundance**
 
 ```bash
 module purge; module load MetaPhlAn/4.1.0-gimkl-2022a-Python-3.10.5
@@ -591,7 +770,7 @@ grep -m1 '^clade_name' tables/merged_taxonomy_allranks.tsv \
 grep -E "s__" tables/merged_taxonomy_allranks.tsv | grep -v "t__" >> tables/merged_species.tsv
 ```
 
-### **Taxonomy: estimated counts**
+### **Taxonomy: Estimated Counts**
 
 Counts need a separate merge, because `merge_metaphlan_tables.py` only merges the `relative_abundance` column. The script below finds the count column by name from the `#clade_name` header, since the column layout varies between MetaPhlAn versions.
 
@@ -651,7 +830,7 @@ humann_split_stratified_table -i tables/ko_cpm.tsv -o tables/
 
 `--file_name` is a substring match, so always write joined tables into `tables/` and never back into `humann/`. Writing them into `humann/` means the next join finds its own output.
 
-### **What Section 13 needs**
+### **What Section 13 Needs**
 
 | File | Contents |
 | --- | --- |
@@ -681,9 +860,9 @@ Follow `SOP_R_Analysis.md` for the mechanics. This section covers only what diff
 
 Two rows below (UniFrac, Faith's PD) are additions rather than changes: Part 2 covers no phylogenetic diversity at all, because the upstream tools disagree on whether they emit a tree — Emu does not, while CONCOMPRA and MetaPhlAn both do — so it is left to the upstream document or your own code.
 
-### **Reshape before you open Part 2**
+### **Reshape Before You Open Part 2**
 
-`SOP_R_Analysis.md` assumes an integer count table with taxonomy in named rank columns. MetaPhlAn produces neither, so **reshape before you open Part 2** — its Stage 1 loader will round your percentages into small integers rather than reject them, and every figure after that will be produced from destroyed data without an error anywhere. Split `clade_name` into the rank columns Part 2 expects, and decide which of the two tables each analysis takes:
+`SOP_R_Analysis.md` assumes an integer count table with taxonomy in named rank columns. MetaPhlAn produces neither, so **reshape before you open Part 2** — Part 2's data-loading step, Section 3, will round your percentages into small integers rather than reject them, and every figure after that will be produced from destroyed data without an error anywhere. Split `clade_name` into the rank columns Part 2 expects, and decide which of the two tables each analysis takes:
 
 ```bash
 python3 - <<'PY'
@@ -717,15 +896,15 @@ You also need metadata keyed by sample ID, with group, batch or run, and every c
 | **UniFrac** | **Available here, though Part 2 does not cover it.** MetaPhlAn 4 ships the SGB phylogeny with its database: `metaphlan/utils/calculate_diversity.R -d beta -m unweighted-unifrac -t <tree> -s t__`. The tree's tips are SGBs, so it needs the `t__` rows that Section 11 strips out — keep an SGB-level table as well if you want this. |
 | **Faith's PD** | Not among `calculate_diversity.R`'s alpha metrics (richness, Shannon, Simpson, Gini), but computable in R from the same tree. |
 
-### **Beta diversity**
+### **Beta Diversity**
 
-Use Bray–Curtis, Aitchison, or both. Aitchison requires you to choose how to handle zeros, and to state the choice:
+Use Bray–Curtis, Aitchison, or both. These abundances are **compositional** — proportions of a fixed total, so one taxon rising forces the others down, and they carry only relative information (Part 2 owns the full treatment). Aitchison requires you to choose how to handle zeros, and to state the choice:
 
 | Approach | Trade-off |
 | --- | --- |
 | Pseudocount below the smallest non-zero value | Simple, but biased |
 | `zCompositions::cmultRepl` | Built for counts, so off-label on relative abundance |
-| **`rclr`** | Tolerates zeros without a pseudocount — the cleanest option |
+| **`rclr`** (robust centred log-ratio) | Tolerates zeros without a pseudocount — the cleanest option |
 
 ### **PERMANOVA**
 
@@ -737,9 +916,9 @@ adonis2(dist ~ group, data = meta, strata = meta$batch, permutations = 999)
 anova(betadisper(dist, meta$group))   # REQUIRED whenever PERMANOVA is significant
 ```
 
-Always run `betadisper`. Without it, a significant PERMANOVA may simply reflect unequal within-group variance rather than a difference in location — the most common objection reviewers raise.
+Always run `betadisper`. Without it, a significant PERMANOVA may reflect unequal within-group variance rather than a difference in location — the most common objection reviewers raise.
 
-### **Differential abundance**
+### **Differential Abundance**
 
 Method requirements differ: MaAsLin 3 and MaAsLin 2 accept counts or relative abundance, ANCOM-BC2 and ALDEx2 need counts, and LinDA is CLR-based (check its vignette). Then:
 
@@ -750,11 +929,11 @@ Method requirements differ: MaAsLin 3 and MaAsLin 2 accept counts or relative ab
 5. State an effect-size threshold, not significance alone.
 6. **Decide your exclusion rule for failed profiles in advance.** An empty profile, or one where a single taxon sits above 99%, is a failed sample rather than a finding. Apply the rule to controls and samples alike, and report how many samples it removed from each group.
 
-On method choice: benchmarking has repeatedly found that the more elaborate compositional methods control false discovery rates less well than their complexity implies. Yang & Chen 2022 (*Microbiome* 10:130) report FDR inflation for several of them at small sample sizes, and find that linear models, the Wilcoxon test, limma and fastANCOM control false discoveries at comparable sensitivity. Nearing et al. 2022 (*Nature Communications*) found ALDEx2 and ANCOM-II the most conservative and the most concordant across 38 datasets. Read ALDEx2 at small N as a defensible *conservative* choice — few false positives, low power — rather than as the reliable one.
+On method choice: elaborate compositional methods often control false discovery rates worse than their complexity implies. Yang & Chen 2022 (*Microbiome* 10:130) report FDR inflation at small sample sizes, with linear models, Wilcoxon, limma and fastANCOM matching them on sensitivity. Nearing et al. 2022 (*Nature Communications*) found ALDEx2 and ANCOM-II the most conservative and most concordant across 38 datasets. At small N, read ALDEx2 as a defensible *conservative* choice — few false positives, low power — not the reliable one.
 
 **Read-based abundances are compositional.** Use compositionally aware methods, and never pass relative abundances to an ordinary linear model as though they were counts.
 
-### **Functional tables**
+### **Functional Tables**
 
 `SOP_R_Analysis.md` does not cover these, so this SOP owns them. Run MaAsLin 2 or 3 on the `_unstratified` CPM tables — `genefamilies_cpm_unstratified.tsv`, `pathabundance_cpm_unstratified.tsv`, `ec_cpm_unstratified.tsv`, `ko_cpm_unstratified.tsv` — with `normalization = "NONE"`, because the tables are already CPM. **Never test an unsplit table.** It holds each feature's community total alongside the per-species rows that sum to it, so the tests are not independent and the multiple-testing correction is meaningless.
 
@@ -855,7 +1034,7 @@ done < samples.txt
 | Section 10 fills the filesystem | Missing `--remove-temp-output`, or `TMPDIR` on a small filesystem |
 | Empty MultiQC report | Ran before the FastQC array finished — use `--dependency` |
 | `cd: no such file or directory` in Section 7 | Reference never downloaded (Section 3.3) |
-| Nothing in `logs/` | `logs/` did not exist at submission, or you submitted from outside `$WORK` |
+| Nothing in `logs/` | `logs/` did not exist at submission |
 
 ## **Appendix C: Resources**
 
@@ -876,7 +1055,3 @@ These are starting points. Size them on two or three samples and calibrate with 
 | `09.metaphlan` | 32 GB | 16 | 4 h | Pass 2 reuses the saved alignment |
 | `10.humann` | 48 GB | 16 | 24 h | **100–170 GB temp per sample**; throttle to `%10` |
 | Section 11 merge | 8 GB | 2 | 30 m | Run under `srun` |
-
----
-
-**Before relying on this SOP, verify the environment.** Section 2 covers most of it: whether `/opt/nesi/db/` exists, the MultiQC, MetaPhlAn, fastp and HUMAnN module strings including capitalisation, whether compute nodes have internet, and the current platform name after NeSI's 2025 refresh. Run Section 2 first, not after a failed array.

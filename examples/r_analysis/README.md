@@ -68,6 +68,8 @@ would give a meaningful decontam result here.
 | `indicator_species.tsv` | Indicator taxa passing FDR < 0.05. |
 | `indicator_summary.txt` | Verbatim `summary(multipatt)` output. |
 | `core_microbiome.txt` | Core genera per environment (supplementary). |
+| `spieceasi_network_stats.txt` | SPIEC-EASI network summary: nodes, edges (±), density, hubs (supplementary). |
+| `spieceasi_edges.tsv` | SPIEC-EASI edge list with signed weights (supplementary). |
 | `sessionInfo.txt` | R and package versions captured at the end of the run. |
 
 ## Environment
@@ -78,6 +80,11 @@ Generated under **R 4.6.0** with the packages named in the SOP's install block
 policy is unchanged: readers run Part 2 locally on their own machine; these
 figures were generated only to show expected output. `ggpubr` is not required —
 significance brackets are drawn with base ggplot2.
+
+The two supplementary figures need extra packages, each guarded so the script
+skips them cleanly if absent: `14_core_microbiome` needs `microbiome`;
+`15_spieceasi_network` needs `igraph`, `ggraph` and **`SpiecEasi`**, which is
+GitHub-only — `remotes::install_github("zdk123/SpiecEasi")`.
 
 ## Figure inventory
 
@@ -96,4 +103,5 @@ significance brackets are drawn with base ggplot2.
 | `11_ancombc2_lfc` | §10 | ANCOM-BC2 log fold changes (significant genera). |
 | `12_indicator_species` | §11 | Top indicator taxa (IndVal.g, FDR < 0.05). |
 | `13_publication_figure` | §12 | Publication-style composite of the key panels. |
-| `14_core_microbiome` | — (supplementary) | Core-microbiome heatmap (prevalence × detection). **Not a SOP step** — an extra example only. |
+| `14_core_microbiome` | — (supplementary) | Core-microbiome size vs detection threshold, per environment. **Not a SOP step** — an extra example only. |
+| `15_spieceasi_network` | — (supplementary) | SPIEC-EASI co-occurrence network on prevalent genera (nodes = genera by phylum, edges = sign of association). **Not a SOP step** — illustrative; n=20 is modest and cross-environment edges partly reflect shared habitat. |

@@ -3,3 +3,6 @@ figures/04_rarefaction.svg
 figures/10_taxonomy_barplot.svg
 ancombc2_raw.txt
 indicator_all.tsv
+
+# run transcript (regenerate with run_example.R)
+run_example.log

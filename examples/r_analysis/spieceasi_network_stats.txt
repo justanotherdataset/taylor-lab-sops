@@ -1,0 +1,8 @@
+SPIEC-EASI (mb) network on 50 prevalent genera, 20 samples
+nodes (non-isolated): 50 | edges: 68 (63 positive, 5 negative)
+edge density: 0.056 | mean degree: 2.72
+hub genera (by degree):
+       Rothia.2 Acinetobacter.5   Methylibium.1  Actinobacillus      Klebsiella 
+              5               5               4               4               4 
+   Sphingomonas   Bacteroides.2   Bacteroides.3    Prevotella.2        Rothia.1 
+              4               4               4               4               3 

@@ -598,6 +598,91 @@ if (HAVE_MICROBIOME) {
   cat("\n----- Fig 14 core microbiome SKIPPED: microbiome not installed -----\n")
 }
 
+# =============================================================================
+# SUPPLEMENTARY - SPIEC-EASI co-occurrence network (NOT a SOP_R_Analysis.md step)
+# -----------------------------------------------------------------------------
+# The SOP names SPIEC-EASI in Section 10 as the compositionally correct way to
+# infer taxon-taxon associations (vs Pearson/Spearman on proportions) but does
+# not demonstrate it. This extra shows a worked network on the most prevalent
+# genera. Illustrative only: n = 20 samples is modest for network inference, and
+# because samples span three very different environments, many associations
+# partly reflect shared habitat rather than direct ecological interaction.
+# =============================================================================
+if (requireNamespace("SpiecEasi", quietly = TRUE) &&
+    requireNamespace("igraph", quietly = TRUE) &&
+    requireNamespace("ggraph", quietly = TRUE)) {
+  step("Fig 15 SPIEC-EASI network (supplementary)", {
+    library(SpiecEasi); library(igraph); library(ggraph); library(tidygraph)
+    set.seed(42)
+    # genus level; keep the most prevalent genera for a tractable, readable network
+    ps_g <- tax_glom(ps_raw, taxrank = "genus", NArm = TRUE)
+    taxa_names(ps_g) <- make.unique(as.character(tax_table(ps_g)[, "genus"]))
+    prev <- rowSums(as(otu_table(ps_g), "matrix") > 0)
+    keep <- names(sort(prev, decreasing = TRUE))[seq_len(min(50, ntaxa(ps_g)))]
+    ps_net <- prune_taxa(keep, ps_g)
+    otu <- t(as(otu_table(ps_net), "matrix"))          # samples x taxa; SpiecEasi clr's internally
+    se  <- spiec.easi(otu, method = "mb", lambda.min.ratio = 1e-2, nlambda = 20,
+                      pulsar.params = list(rep.num = 20, seed = 42))
+    beta <- as.matrix(SpiecEasi::symBeta(SpiecEasi::getOptBeta(se), mode = "maxabs"))
+    rownames(beta) <- colnames(beta) <- colnames(otu)
+    g <- graph_from_adjacency_matrix(beta, mode = "undirected", weighted = TRUE, diag = FALSE)
+    g <- delete_vertices(g, igraph::degree(g) == 0)    # drop isolated nodes
+    if (vcount(g) < 2 || ecount(g) < 1) stop("network has no edges at this sparsity")
+    # tax_glom NAs ranks below the glom rank; with a finest-first (Emu) taxonomy
+    # that includes phylum, so map each genus back to its phylum from ps_raw.
+    orig <- as(tax_table(ps_raw), "matrix")
+    g2p  <- tapply(orig[, "phylum"], orig[, "genus"],
+                   function(x) { x <- x[!is.na(x)]; if (length(x)) names(sort(table(x), decreasing = TRUE))[1] else NA })
+    ph <- unname(g2p[sub("\\.[0-9]+$", "", V(g)$name)]); ph[is.na(ph)] <- "Unassigned"
+    V(g)$phylum <- ph
+    V(g)$deg    <- igraph::degree(g)
+    E(g)$sign   <- ifelse(E(g)$weight > 0, "positive", "negative")
+    E(g)$weight <- abs(E(g)$weight)                    # FR layout needs positive weights (strength)
+    # label only the hub genera (top degree) to keep the plot readable
+    hub_n  <- names(sort(igraph::degree(g), decreasing = TRUE))[seq_len(min(10, vcount(g)))]
+    V(g)$lab <- ifelse(V(g)$name %in% hub_n, V(g)$name, "")
+    # collapse rare phyla to Other for a colour-blind-safe legend
+    topph <- names(sort(table(ph), decreasing = TRUE))[seq_len(min(9, length(unique(ph))))]
+    V(g)$phy_lab <- ifelse(ph %in% topph, ph, "Other")
+    lvls <- c(setdiff(sort(unique(V(g)$phy_lab)), "Other"),
+              if ("Other" %in% V(g)$phy_lab) "Other")
+    ncol <- setNames(pal11[seq_along(lvls)], lvls)
+    if ("Other" %in% names(ncol)) ncol["Other"] <- "#999999"
+    # stats + edge list to disk
+    npos <- sum(E(g)$sign == "positive"); nneg <- sum(E(g)$sign == "negative")
+    sink(file.path(script_dir, "spieceasi_network_stats.txt"))
+    cat(sprintf("SPIEC-EASI (mb) network on %d prevalent genera, %d samples\n",
+                length(keep), nrow(otu)))
+    cat(sprintf("nodes (non-isolated): %d | edges: %d (%d positive, %d negative)\n",
+                vcount(g), ecount(g), npos, nneg))
+    cat(sprintf("edge density: %.3f | mean degree: %.2f\n",
+                edge_density(g), mean(igraph::degree(g))))
+    cat("hub genera (by degree):\n"); print(sort(igraph::degree(g), decreasing = TRUE)[seq_len(min(10, vcount(g)))])
+    sink()
+    el <- igraph::as_data_frame(g, what = "edges")
+    write.table(el, file.path(script_dir, "spieceasi_edges.tsv"),
+                sep = "\t", quote = FALSE, row.names = FALSE)
+    cat(sprintf("SPIEC-EASI network: %d nodes, %d edges (%d+/%d-)\n",
+                vcount(g), ecount(g), npos, nneg))
+    tg <- as_tbl_graph(g)
+    p_net <- ggraph(tg, layout = "fr") +
+      geom_edge_link(aes(colour = sign), width = 0.4, alpha = 0.6) +
+      geom_node_point(aes(fill = factor(phy_lab, levels = lvls), size = deg),
+                      shape = 21, colour = "grey20") +
+      geom_node_text(aes(label = lab), size = 2.4, colour = "black") +
+      scale_edge_colour_manual(values = c(positive = "#0072B2", negative = "#D55E00")) +
+      scale_fill_manual(values = ncol, drop = FALSE) +
+      scale_size(range = c(2, 7)) +
+      labs(title = "SPIEC-EASI co-occurrence network (supplementary; not a SOP step)",
+           subtitle = "top prevalent genera; n=20 across 3 environments — illustrative, associations partly reflect habitat",
+           fill = "Phylum", edge_colour = "Association", size = "Degree") +
+      theme_void() + theme(legend.position = "right")
+    save_gg(p_net, "15_spieceasi_network", w = 11, h = 8)
+  })
+} else {
+  cat("\n----- Fig 15 SPIEC-EASI SKIPPED: SpiecEasi/igraph/ggraph not all installed -----\n")
+}
+
 writeLines(capture.output(sessionInfo()), file.path(script_dir, "sessionInfo.txt"))
 
 cat("\n=============================================================\n")

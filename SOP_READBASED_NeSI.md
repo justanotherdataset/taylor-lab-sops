@@ -981,38 +981,9 @@ Your methods section needs all of the following. Most of it is in `versions.txt`
 
 ---
 
-## **Appendix A: Submission Chain**
 
-Run this from `$WORK`. Each job waits on the one it depends on, so you can submit the whole thing at once and let SLURM sequence it.
 
-```bash
-cd "$WORK"; NSAMP=$(wc -l < samples.txt); T=20
-
-FQR=$(sbatch --parsable --array=1-${NSAMP}%${T} scripts/05a.qc_fastqc.sl raw qc/raw)
-       sbatch --dependency=afterok:$FQR         scripts/05b.qc_multiqc.sl qc/raw
-
-# two-colour chemistry? add trimpolygright=8 to pass 1, or use the fastp variant - Section 6
-TRIM=$(sbatch --parsable --array=1-${NSAMP}%${T} scripts/06.trim.sl)
-
-FQT=$(sbatch --parsable --dependency=afterok:$TRIM --array=1-${NSAMP}%${T} \
-             scripts/05a.qc_fastqc.sl trim qc/trim)
-       sbatch --dependency=afterok:$FQT         scripts/05b.qc_multiqc.sl qc/trim
-
-HOST=$(sbatch --parsable --dependency=afterok:$TRIM --array=1-${NSAMP}%${T} scripts/07.host_hostile.sl)
-# Option B instead:
-# IDX=$(sbatch --parsable scripts/07a.host_index.sl)
-# HOST=$(sbatch --parsable --dependency=afterok:$IDX:$TRIM --array=1-${NSAMP}%${T} scripts/07b.host_filter.sl)
-
-       sbatch --dependency=afterok:$HOST        scripts/08.read_counts.sl
-MPA=$(sbatch --parsable --dependency=afterok:$HOST --array=1-${NSAMP}%${T} scripts/09.metaphlan.sl)
-       sbatch --dependency=afterok:$MPA --array=1-${NSAMP}%10 scripts/10.humann.sl
-
-squeue --me
-```
-
-`afterok:$IDX:$TRIM` waits on both jobs. Section 11 is deliberately left out of the chain, because you should look at Section 8's output before building final tables.
-
-## **Appendix B: Triage**
+## **Appendix A: Triage**
 
 ```bash
 JOB=12345678

@@ -2,11 +2,18 @@
 
 # **Part 2: R Analysis (Count Tables to Results)**
 
-**v2.0** | last updated July 2026 | runs locally in R, not on NeSI | platform-agnostic
+**v2.1** | last updated July 2026 | runs locally in R, not on NeSI | platform-agnostic
 
 This document starts from the combined count tables produced upstream. For the Nanopore amplicon pipeline see `SOP_EMU_NeSI.md`, or `SOP_CONCOMPRA_NeSI.md` for consensus OTUs; for Illumina shotgun see `SOP_READBASED_NeSI.md`, whose Section 13 lists what changes here when the input is relative abundance.
 
 The examples use Cam's tuatara PhD data, so the variable names (Site, Sex, Species) and site names (Takapourewa, Zealandia, YoungNicksHead) are specific to that study. Adapt all variable names to your own metadata.
+
+### **Before You Start**
+
+- **You need R on your own machine.** Part 2 runs locally, not on NeSI. Install a current R (RStudio is the usual front end) and run the package block in Section 2 once — it is slow, so do it before you need it.
+- **You need three files, already on this machine:** an integer count table, a taxonomy table (or ranks inside the count table) and a metadata file with a `SampleType` column. Sample IDs must match byte-for-byte across them. See "Get your files onto this machine" in Section 3 for copying them off NeSI.
+- **What this does not cover.** Producing the count table (see Part 1 for Nanopore, `SOP_READBASED_NeSI.md` for Illumina shotgun); short-read ASV workflows (DADA2); non-independent designs beyond the pointers given (repeated measures, nested, co-housed — see Troubleshooting).
+- **If you have no count table yet,** stop here and start with Part 1.
 
 ---
 
@@ -15,54 +22,66 @@ The examples use Cam's tuatara PhD data, so the variable names (Site, Sex, Speci
 This SOP takes you from a combined Emu count table to publication-ready figures and statistics:
 
 ```
-STAGE 1: Setup & data loading
-   Install packages → load count table + taxonomy + metadata
+SECTION 2: Setup & data loading
+   Install packages → load count table + taxonomy + metadata (Section 3)
                     ↓
-STAGE 2: Decontam & phyloseq construction
+SECTION 4: Decontam & phyloseq construction
    Remove contaminant taxa → build ps_raw
                     ↓
-STAGE 3: Exploratory QC
+SECTION 5: Exploratory QC
    Library sizes → batch effects → outliers → taxonomy check
                     ↓
-STAGE 4: Normalisation
+SECTION 6: Normalisation
    Rarefaction curve → SRS to Cmin → ps_srs
                     ↓
-STAGE 5: Analysis
-   • Alpha diversity
-   • Beta diversity
-   • Taxonomy barplots
-   • Differential abundance
-   • Indicator species
+SECTIONS 7-11: Analysis
+   • Alpha diversity        (7)
+   • Beta diversity         (8)
+   • Taxonomy barplots      (9)
+   • Differential abundance (10)
+   • Indicator species      (11)
 ```
 
-This SOP covers parallel designs, where each animal received only one treatment. If your samples are not independent (repeated measures, co-housed animals, nested designs), the diversity and PERMANOVA steps need restricted permutations and the differential abundance models need random effects; see the Common Pitfalls section for the key considerations.
-
-## **Key objects you'll work with**
-
-The same objects appear throughout. Consistent naming is what lets you copy code between sections without breaking things.
-
-| Object | Type | What it holds | Where it's built | Used for |
-|---|---|---|---|---|
-| `counts_raw` | data.frame | Raw integer counts, taxa × samples | Stage 1 | Building ps_raw |
-| `taxonomy` | matrix | Taxonomic ranks per taxon | Stage 1 | Building ps_raw |
-| `metadata` | data.frame | Sample metadata, samples × variables | Stage 1 | Building ps_raw, group statistics |
-| `ps_raw` | phyloseq | Raw counts + taxonomy + metadata | Stage 2 | ANCOM-BC2, MaAsLin2, ALDEx2, Aitchison distance |
-| `counts_srs` | data.frame | SRS-normalised counts | Stage 4 | Building ps_srs, indicator species |
-| `ps_srs` | phyloseq | SRS counts + taxonomy + metadata | Stage 4 | Alpha diversity, Bray-Curtis, taxonomy plots |
-| `dist_bray`, `dist_ait` | dist | Distance matrices | Section 1 Step 1 | PCoA, PERMANOVA, betadisper |
-| `pcoa_bray`, `pcoa_ait` | ordination | PCoA results | Section 1 Step 2 | Ordination plots |
-| `disp_*` | betadisper | Dispersion test results | Section 1 Step 3 | permutest, centroid plots |
-| `da_ancom`, `da_maaslin` | varies | DA fit objects | Section 2 | Identifying differential taxa |
-
-**The one rule to remember:** use `ps_raw` for differential abundance and Aitchison distance; use `ps_srs` for alpha diversity and Bray-Curtis. Mixing them produces wrong answers with no error message. The `_raw`/`_srs` suffix is your reminder.
+This SOP covers parallel designs, where each animal received only one treatment. If your samples are not independent (repeated measures, co-housed animals, nested designs), the diversity and PERMANOVA steps need restricted permutations and the differential abundance models need random effects; see Troubleshooting for the key considerations.
 
 ---
 
-## **1. Analysis of Amplicon/Count Data in R**
+## **1. Understanding Your Data**
 
-With your count table and taxonomy table from Emu, move to R for statistical analysis and visualisation. This section is the same regardless of whether your data came from Illumina or Nanopore; the input format is identical.
+Before any code, hold three things in your head.
 
-### **Installing and loading libraries**
+**Your data is a table of counts.** Taxa in rows, samples in columns, one integer per cell: how many reads of each taxon in each sample. A taxonomy table maps each taxon to its ranks (domain through species), and a metadata file records the experimental variables for each sample.
+
+**Those counts are compositional.** Each sample has a fixed read total, so a taxon's count is really its *share* of that sample, not an absolute cell count. If one taxon rises, the others must fall even when nothing about them changed — a single fact that drives every normalisation and test choice below (worked through in Section 10).
+
+**phyloseq** is both an R package and the object type it gives you: a single container holding your count table, taxonomy and metadata together, so that subsetting or filtering keeps all three in step. Every analysis below reads from one of two such objects, `ps_raw` (raw counts) and `ps_srs` (depth-normalised).
+
+**The one rule to remember:** use `ps_raw` for differential abundance and Aitchison distance; use `ps_srs` for alpha diversity and Bray-Curtis. Mixing them produces wrong answers with no error message. The `_raw`/`_srs` suffix is your reminder.
+
+The same objects appear throughout, and consistent naming is what lets you copy code between sections without breaking things.
+
+| Object | Type | What it holds | Where it's built | Used for |
+|---|---|---|---|---|
+| `counts_raw` | data.frame | Raw integer counts, taxa × samples | Section 3 | Building ps_raw |
+| `taxonomy` | matrix | Taxonomic ranks per taxon | Section 3 | Building ps_raw |
+| `metadata` | data.frame | Sample metadata, samples × variables | Section 3 | Building ps_raw, group statistics |
+| `ps_raw` | phyloseq | Raw counts + taxonomy + metadata | Section 4 | ANCOM-BC2, MaAsLin2, ALDEx2, Aitchison distance |
+| `counts_srs` | data.frame | SRS-normalised counts | Section 6 | Building ps_srs, indicator species |
+| `ps_srs` | phyloseq | SRS counts + taxonomy + metadata | Section 6 | Alpha diversity, Bray-Curtis, taxonomy plots |
+| `dist_bray`, `dist_ait` | dist | Distance matrices | Section 8, Step 1 | PCoA, PERMANOVA, betadisper |
+| `pcoa_bray`, `pcoa_ait` | ordination | PCoA results | Section 8, Step 2 | Ordination plots |
+| `disp_*` | betadisper | Dispersion test results | Section 8, Step 3 | permutest, centroid plots |
+| `da_ancom`, `da_maaslin` | varies | DA fit objects | Section 10 | Identifying differential taxa |
+| `ps_relab` | phyloseq | Relative-abundance counts | upstream (read-based) | see `SOP_READBASED_NeSI.md` Section 13 |
+| `ps_estcounts` | phyloseq | Estimated integer counts | upstream (read-based) | see `SOP_READBASED_NeSI.md` Section 13 |
+
+The last two names are canonical across the SOP set but built upstream, not here: they come from the read-based shotgun workflow, where the input is relative abundance rather than integer counts.
+
+---
+
+## **2. Install and Load Packages**
+
+Install these once, then load them at the top of every session. The workflow is the same whether your reads came from Illumina or Nanopore; the input format is identical.
 
 ```r
 # Install packages (only need to do this once)
@@ -81,7 +100,8 @@ devtools::install_github("microsud/microbiomeutilities")
 # pairwiseAdonis for post-hoc PERMANOVA comparisons
 # devtools::install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
 
-# Mixed models for non-independent designs (repeated measures, nested)
+# OPTIONAL — mixed models, only for non-independent designs (repeated measures,
+# co-housed, nested). Skip this line if your samples are independent.
 install.packages(c("lme4", "lmerTest", "emmeans", "broom", "broom.mixed"))
 
 # Load all libraries up front
@@ -97,7 +117,9 @@ library(microbiome)
 library(microbiomeutilities)
 ```
 
-### **Stage 1: Loading and preparing your data**
+**How long.** The CRAN packages install in a few minutes. The Bioconductor block (`phyloseq`, `ANCOMBC`, `Maaslin2`, `ALDEx2`, `mia`) is the slow one — 20 to 40 minutes on a first run, with long silent pauses while packages compile. That is normal; do not interrupt it. You only run this block once.
+
+## **3. Load and Prepare Your Data**
 
 A phyloseq object needs three inputs. You may need to clean these up depending on what your files look like:
 
@@ -119,6 +141,14 @@ The loader below reads Emu's combined counts table, which is already in that sha
 - **MetaPhlAn / the read-based SOP** produces relative abundance, not counts, with the lineage in a single `clade_name` column. Use the reshaping block in `SOP_READBASED_NeSI.md` Section 13, and read that section before this one.
 
 **If your table holds relative abundance rather than integer counts, do not run the `round()` line below, do not run SRS, and do not pass the table to ANCOM-BC2, MaAsLin2 or ALDEx2 as written.** Rounding a percentage table produces small whole numbers instead of an error, and every step after it will run and be wrong. The guard below stops that.
+
+**Get your files onto this machine first.** The count table, taxonomy and metadata are produced on NeSI; this document runs locally. Copy them down before you start — from a terminal on your own machine:
+
+```bash
+scp <username>@login.mahuika.nesi.org.nz:/nesi/project/<your_nesi_project_code>/.../emu-combined-counts_silva.tsv .
+```
+
+(or drag them across in the NeSI JupyterHub file browser). Point `setwd()` below at the folder you put them in.
 
 ```r
 setwd("~/path/to/your/files")
@@ -186,8 +216,8 @@ stopifnot(identical(rownames(metadata), colnames(counts_raw)))
 
 Alongside your biological variables, include three housekeeping columns from the start:
 
-- **`SampleType`** with values `"sample"` or `"blank"`. The decontam step (Stage 2) uses this to identify your negative controls, and it is far more robust than hardcoding which columns are blanks. Every sample, including blanks, needs a value here.
-- **`Batch`** (extraction batch or sequencing run). You need this to test for batch effects in Stage 3 and to include batch as a covariate (`~ Batch + Site`) if one is present. Record it even if you think everything was processed together; it is much harder to reconstruct later.
+- **`SampleType`** with values `"sample"` or `"blank"`. The decontam step (Section 4) uses this to identify your negative controls, and it is far more robust than hardcoding which columns are blanks. Every sample, including blanks, needs a value here.
+- **`Batch`** (extraction batch or sequencing run). You need this to test for batch effects in Section 5 and to include batch as a covariate (`~ Batch + Site`) if one is present. Record it even if you think everything was processed together; it is much harder to reconstruct later.
 - **`Plate`** (and optionally well position). Plate row/column can introduce technical variation, so capturing it lets you check for and model plate effects the same way as batch.
 
 Example `metadata_file.txt` — the columns below are separated by single tab characters; the alignment here is only for readability. If you build it in Excel, save as *Text (tab delimited)*.
@@ -203,7 +233,7 @@ blank01     NA              NA      NA          NA          B1       plate1    b
 
 Note that blanks keep their `Batch` and `Plate` values (they were still processed on a specific run and plate) but take `NA` for the biological variables.
 
-**Avoid spaces and punctuation in factor levels.** ANCOM-BC2 builds its output column names by pasting the variable name onto the level (`lfc_SiteZealandia`), so a level like `Young Nicks Head` produces `` `lfc_SiteYoung Nicks Head` `` — a column you cannot reference without backticks — and MaAsLin2 rewrites the same name again, substituting dots. That is why the example uses `YoungNicksHead`.
+**Avoid spaces and punctuation in factor levels.** ANCOM-BC2 builds its output column names by pasting the variable name onto the level (e.g. `lfc_SiteZealandia`, the log fold change for Zealandia), so a level like `Young Nicks Head` produces `` `lfc_SiteYoung Nicks Head` `` — a column you cannot reference without backticks — and MaAsLin2 rewrites the same name again, substituting dots. That is why the example uses `YoungNicksHead`.
 
 **Set factor levels and reference levels.** Categorical variables should be factors with an explicit reference level, since this determines what everything else is compared against in PERMANOVA, ANCOM-BC2, and MaAsLin2. The default is alphabetical:
 
@@ -235,11 +265,13 @@ cor(numeric_vars, use = "complete.obs")   # values > 0.7 suggest collinearity
 colSums(is.na(metadata))   # count NAs per column
 ```
 
-### **Stage 2: Decontamination and building the phyloseq object**
+## **4. Remove Contaminants and Build ps_raw**
 
 Every extraction introduces trace bacterial DNA from reagents, skin, and plastics. The **decontam** package uses your negative control blanks to identify and remove contaminant taxa.
 
 Run decontam on the full, unfiltered count table before any other filtering. The approach below uses a `SampleType` column (values `"sample"` or `"blank"`) to identify blanks, which is more robust than hardcoding sample positions.
+
+**What "prevalence" means here.** `decontam` has two ways to spot a contaminant. The *frequency* method needs each sample's DNA concentration and flags taxa whose abundance rises as input DNA falls. The *prevalence* method needs no concentrations: it flags taxa appearing more consistently in your blanks than in real samples. **We use prevalence** because most labs lack per-sample DNA quantitation, and negative controls are always available. Use `frequency` only if you recorded a concentration for every sample.
 
 ```r
 # Identify blanks from metadata
@@ -267,6 +299,8 @@ metadata   <- metadata[!is_blank, ]
 
 cat("\nAfter decontam:", nrow(counts_raw), "taxa,", ncol(counts_raw), "samples\n")
 ```
+
+> **Expect** a handful of contaminant taxa flagged, not hundreds. Hundreds usually means `SampleType` is mislabelled — check that every blank reads `"blank"` and every real sample `"sample"` before trusting the list.
 
 Record which contaminants were found and report this in your methods. Common kit contaminants include *Pseudomonas*, *Acinetobacter*, *Sphingomonas*, and *Bradyrhizobium*.
 
@@ -304,7 +338,7 @@ saveRDS(ps_raw, "checkpoint_ps_raw.rds")
 # Reload later with: ps_raw <- readRDS("checkpoint_ps_raw.rds")
 ```
 
-### **Stage 3: Exploring your data before analysis**
+## **5. Explore Your Data Before Analysis**
 
 Explore your data before any formal statistics. This step catches problems that would otherwise silently corrupt your results.
 
@@ -373,9 +407,9 @@ sort(avg_dist, decreasing = TRUE)   # highest values are most dissimilar
 
 Investigate before removing. Only remove outliers with documented justification, and always run a sensitivity analysis with and without the outlier to check whether your conclusions change.
 
-### **Stage 4: Normalisation**
+## **6. Normalise to ps_srs**
 
-**The problem.** Samples have different sequencing depths. Sample A with 50,000 reads will appear more diverse than Sample B with 5,000, simply because deeper sequencing catches rarer taxa. Comparing diversity without accounting for this compares sequencing effort, not biology.
+**The problem.** Samples have different sequencing depths. Sample A with 50,000 reads will appear more diverse than Sample B with 5,000, because deeper sequencing catches rarer taxa. Comparing diversity without accounting for this compares sequencing effort, not biology.
 
 **Why there's no single answer.** Microbiome counts have three awkward properties: uneven library sizes, compositionality (proportions sum to 1), and zero-inflation. No single normalisation handles all three, which is why different analyses use different approaches.
 
@@ -386,7 +420,7 @@ The main methods:
 - **Rarefying** = a single random subsample. Noisy, and the practice that was criticised. `phyloseq::rarefy_even_depth()` does this.
 - **Rarefaction** = averaging a metric across many (1,000+) subsamplings. This cancels the noise and is robust. `vegan::avgdist()` does this for distance matrices.
 
-Schloss found rarefaction was the only method that decoupled diversity from sequencing depth across all metrics tested. He also found that the standard CLR/Aitchison distance, despite being theoretically compositionally correct, remained strongly sensitive to sequencing depth on real, sparse data. That is a caution about Aitchison, not a reason to drop it: we report it alongside Bray-Curtis rather than instead of it, we use the robust (rCLR) variant, and Step 2 includes an explicit check that the Aitchison ordination is not simply tracking library size.
+Schloss found rarefaction the only method that decoupled diversity from depth across every metric tested. He also found that Aitchison distance — Euclidean distance after a centred-log-ratio (CLR) transform, defined with TSS and CSS in Appendix B — still tracked depth on sparse data. That is a caution, not a veto: we report Aitchison alongside Bray-Curtis (not instead of it), use the robust rCLR variant, and check in Step 2 that the Aitchison ordination is not tracking library size.
 
 **SRS (Scaling with Ranked Subsampling)** is a deterministic alternative. It scales counts proportionally to a target depth (**Cmin**), then distributes rounding remainders to taxa ranked by their fractional remainders.
 
@@ -394,11 +428,7 @@ Schloss found rarefaction was the only method that decoupled diversity from sequ
 
 We use SRS as our primary method because it is deterministic and reproducible. It is also available as an interactive Shiny app (`SRS::SRS.shiny.app()`) for exploring how different Cmin values affect your data before committing.
 
-**CLR (Centred Log-Ratio)** divides each count by the sample's geometric mean, then takes the log. This removes the compositional constraint and moves data into a space where Euclidean distance is appropriate; it is what makes Aitchison distance work. CLR is not appropriate for alpha diversity, and it is sensitive to zeros (you cannot log zero), which is why we use the robust CLR (rCLR) variant that skips zeros.
-
-**TSS (Total Sum Scaling)** divides each count by the sample total to get proportions. Fine for taxonomy barplots and as input to some DA tools, but on its own it does not correct for compositional bias.
-
-**CSS (Cumulative Sum Scaling)** is a quantile-based normalisation from metagenomeSeq, more robust than simple TSS. Available as a normalisation option in MaAsLin2.
+Other methods — CLR (which makes Aitchison distance work), TSS and CSS, and when each applies — are catalogued in Appendix B.
 
 **Which normalisation for which analysis:**
 
@@ -464,11 +494,7 @@ ps_srs <- phyloseq(otu_table(counts_srs, taxa_are_rows = TRUE),
 stopifnot(identical(sample_names(ps_raw), sample_names(ps_srs)))
 ```
 
-### **Stage 5: Analysis**
-
-With a normalised object and a clean ordination in hand, run the analyses themselves.
-
-#### **Alpha diversity**
+## **7. Alpha Diversity**
 
 Alpha diversity measures diversity within a single sample: how many taxa are present and how evenly distributed. A pristine soil might hold thousands of species in roughly equal abundance (high alpha diversity); an antibiotic-treated gut might hold a handful with one dominating (low alpha diversity).
 
@@ -499,7 +525,7 @@ pw_obs <- pairwise.wilcox.test(alpha_div$Observed, alpha_div$Site,
 print(pw_obs)
 ```
 
-**The figure must be drawn from these adjusted p-values, not from a second set computed inside the plotting call.** `stat_compare_means()` runs its own unadjusted Wilcoxon tests and draws a bracket for every comparison you list, whether or not the Kruskal-Wallis gate above was passed. Left as-is, a figure can carry a `*` on the same data for which the text reports "no significant difference" — and the figure is what goes into the thesis. The helper below converts the adjusted matrix into brackets so there is only ever one set of numbers:
+**Draw the figure from these adjusted p-values — never let the plot compute its own.** `stat_compare_means()` silently runs *unadjusted* Wilcoxon tests and brackets every comparison, ignoring the Kruskal-Wallis gate above. Left in, it can stamp a `*` on data the text calls non-significant — and the figure is what goes into the thesis. The helper below turns the adjusted matrix into brackets so there is only ever one set of numbers:
 
 ```r
 # Turn a BH-adjusted pairwise p-value matrix into the frame
@@ -575,13 +601,13 @@ plot_richness(ps_srs, x = "Sex", measures = "Observed") +
     theme(text = element_text(size = 15))
 ```
 
-#### **Beta diversity**
+## **8. Beta Diversity**
 
 Beta diversity measures dissimilarity between communities. Two samples with identical species in identical proportions have zero beta diversity; two sharing no species have maximum beta diversity.
 
 The workflow is six steps: (1) calculate distance matrices, (2) ordinate, (3) check dispersion, (4) PERMANOVA, (5) pairwise PERMANOVA if >2 groups, and (6) an optional Jaccard (presence/absence) lens.
 
-##### **Step 1: Distance matrices**
+### **Step 1: Distance Matrices**
 
 A distance matrix holds the dissimilarity between every pair of samples. We calculate two, because each captures different aspects of community difference.
 
@@ -591,7 +617,9 @@ BC = 1 - (2 × sum of shared minimum abundances) / (total abundance in both samp
 
 It takes the smaller count of each taxon between two samples (what they share), sums these, and divides by the total. Identical communities score 0; communities sharing nothing score 1. It uses both presence and abundance, and is what most published 16S studies use.
 
-**Aitchison distance** is the compositionally appropriate alternative. Sequencing data is compositional: each sample has a fixed total, so taxon proportions are not independent. If one taxon's proportion rises, others must fall, even without real change. Bray-Curtis does not account for this, which can distort distances when a few taxa dominate or shift sharply. Aitchison distance applies a CLR transformation (dividing each count by the sample's geometric mean, then taking the log) and computes Euclidean distance in that space, where taxa are independent.
+**Aitchison distance** is the compositionally appropriate alternative. Sequencing data is compositional — each sample has a fixed read total, so if one taxon's proportion rises the others must fall, even with no real change. Bray-Curtis ignores this, which distorts distances when a few taxa dominate.
+
+Aitchison distance applies a CLR transformation (divide each count by the sample's geometric mean, then take the log) and measures ordinary Euclidean distance in that space, where taxa behave independently.
 
 ```r
 # Bray-Curtis (uses ps_srs)
@@ -606,7 +634,7 @@ dist_ait     <- vegdist(counts_raw_t, method = "robust.aitchison")
 
 If your conclusions agree across both metrics, you can be more confident they are robust. If they differ, the compositional structure of your data matters and you should think about which interpretation fits. Present both.
 
-##### **Step 2: Ordination**
+### **Step 2: Ordination**
 
 Ordination compresses the distance matrix into a 2D plot where each sample is a point and on-plot distances approximate community dissimilarities. It is the single most informative plot before any test: it shows whether groups separate, whether there are outliers, and whether a confounder (batch, extraction date, run) drives more variation than your biological variable.
 
@@ -636,7 +664,7 @@ plot_ordination(ps_srs, pcoa_bray, color = "Site") +
 
 **PCoA with Aitchison (uses `ps_raw`):**
 
-Aitchison distance is computed on raw counts. rCLR is a per-sample log-ratio, so scaling a sample's counts by a constant leaves the transformed values unchanged and applying SRS first would throw reads away for no gain. What rCLR does *not* remove is depth-dependent *detection*: a deeper sample simply has more non-zero taxa, which is why Schloss (2024) found Aitchison distance still tracked depth on sparse data. Compute the ordination first, then check whether depth is driving it:
+Aitchison distance is computed on raw counts. rCLR is a per-sample log-ratio, so scaling a sample's counts by a constant leaves the transformed values unchanged and applying SRS first would throw reads away for no gain. What rCLR does *not* remove is depth-dependent *detection*: a deeper sample has more non-zero taxa, which is why Schloss (2024) found Aitchison distance still tracked depth on sparse data. Compute the ordination first, then check whether depth is driving it:
 
 ```r
 pcoa_ait  <- ordinate(ps_raw, method = "PCoA", distance = dist_ait)
@@ -683,6 +711,7 @@ Closer points have more similar communities. The axis labels show how much total
 
 ```r
 set.seed(42)   # NMDS uses random starts; lock the seed for reproducible figures
+# Runtime: trymax=999 can take a minute or two; it is iterating, not stuck.
 nmds_bray <- ordinate(ps_srs, method = "NMDS", distance = "bray",
                       trymax = 999, autotransform = TRUE)
 stressplot(nmds_bray)   # stress < 0.2 acceptable; < 0.1 good
@@ -690,7 +719,7 @@ stressplot(nmds_bray)   # stress < 0.2 acceptable; < 0.1 good
 
 `set.seed()` keeps reruns identical (NMDS starts from random configurations). `trymax = 999` gives metaMDS enough random starts to find a stable solution on small or noisy datasets; the default 20 is often too few. If NMDS still reports "did not converge" at 999, that signals your data does not admit a clean 2D embedding, usually too few samples or too little between-group variation. Stress interpretation: < 0.05 excellent, < 0.1 good, < 0.2 acceptable, > 0.2 unreliable.
 
-##### **Step 3: Check dispersion**
+### **Step 3: Check Dispersion**
 
 Before testing whether group centroids differ, check that the within-group spread (dispersion) is roughly equal. PERMANOVA assumes this; if one group is much more spread out, a significant result could reflect that unequal spread rather than different compositions.
 
@@ -783,17 +812,24 @@ plot_betadisper_distance(disp_site_bray,  "Bray-Curtis: distance to centroid by 
 plot_betadisper_distance(disp_site_ait,   "Aitchison: distance to centroid by Site")
 ```
 
-In the centroid plot, each point is a sample, each diamond is a group centroid, and the ray length is the distance betadisper tests. Long rays mean high dispersion. In the boxplot, the y-axis is each sample's distance to its own centroid; if one box sits visibly higher, the dispersion test will likely return p < 0.05. The centroid plot shows the spatial pattern; the boxplot shows the magnitude. For a thesis figure, publish the centroid plot; keep the boxplot for supplementary material or diagnosing surprising results.
+In the centroid plot, each point is a sample, each diamond a group centroid, and the ray length is the distance betadisper tests — long rays mean high dispersion. In the boxplot, the y-axis is each sample's distance to its own centroid; a visibly higher box means the test will likely return p < 0.05.
+
+The centroid plot shows the spatial pattern, the boxplot the magnitude. For a thesis figure publish the centroid plot; keep the boxplot for supplementary material or for diagnosing a surprising result.
 
 These plots live in the same coordinate space as your Step 2 PCoA. The PCoA answers the location question (do groups occupy different regions? tested by PERMANOVA); the centroid plot answers the dispersion question (do groups have different spread? tested by betadisper). Reporting both makes clear whether a significant PERMANOVA reflects a location difference, a dispersion difference, or both.
 
 If `permutest` returns p > 0.05, dispersions are equal and the assumption is met. If p < 0.05, you can still run PERMANOVA but must report it and note that a significant result could partly reflect different within-group variability.
 
-##### **Step 4: PERMANOVA**
+### **Step 4: PERMANOVA**
 
 PERMANOVA tests whether one group's centroid differs from another's in multivariate space, working on the distance matrix directly and testing all taxa simultaneously.
 
-**How it works.** Unlike a t-test or ANOVA, PERMANOVA assumes no distribution. It builds its own null from your data: (1) compute the real F-statistic (variation explained by your grouping variable versus residual); (2) shuffle the group labels and recompute F; (3) repeat 9,999 times; (4) count how many permuted F values exceed your real F. If fewer than 5% do, the result is significant at p < 0.05. If the groups were truly the same, shuffling would not change F much.
+**How it works.** Unlike a t-test or ANOVA, PERMANOVA assumes no distribution — it builds its own null by reshuffling your data:
+
+1. Compute the real F-statistic: variation explained by your grouping variable versus residual.
+2. Shuffle the group labels and recompute F.
+3. Repeat 9,999 times.
+4. Count how many shuffled F values beat the real one. Fewer than 5% means p < 0.05 — if the groups were truly alike, shuffling would barely change F.
 
 **What can and cannot be permuted.** The default permutes observations freely across all samples, valid only when all samples are independent. If your data has structure, restrict permutations:
 
@@ -814,6 +850,7 @@ Ignoring these constraints inflates your false positive rate.
 # Permutation scheme: free permutation, 9,999 permutations
 perm_free <- how(nperm = 9999)
 
+# Runtime: 9,999 permutations take a few seconds to ~a minute.
 # Bray-Curtis (ps_srs metadata)
 adonis2(dist_bray ~ Site * Sex,
         data         = data.frame(sample_data(ps_srs)),
@@ -836,7 +873,7 @@ adonis2(dist_ait ~ Site * Sex,
 
 **Reporting.** *"Microbial community composition differed significantly between sites based on both Bray-Curtis dissimilarity (PERMANOVA: R² = 0.38, p = 0.02) and Aitchison distance (R² = 0.35, p = 0.03), with site explaining 35-38% of the variation. Multivariate dispersions did not differ between sites for either metric (betadisper: Bray-Curtis p = 0.42, Aitchison p = 0.55)."*
 
-##### **Step 5: Pairwise PERMANOVA (for >2 groups)**
+### **Step 5: Pairwise PERMANOVA (for >2 Groups)**
 
 A significant overall PERMANOVA tells you at least one group differs, but not which. For three or more groups, use pairwise post-hoc comparisons, as with pairwise Wilcoxon after Kruskal-Wallis.
 
@@ -873,7 +910,7 @@ adjust_pairwise(pw_ait)
 
 `pairwise.adonis2()` performs no multiple-testing correction itself; `adjust_pairwise()` above extracts the raw per-pair p-values and applies Benjamini-Hochberg. **Report the `p_BH` column, not `p_raw`.** With three or more pairwise comparisons the corrected values are larger, so reporting the raw ones overstates significance. The output might show Takapourewa vs Zealandia significant (p_BH = 0.03) but Zealandia vs YoungNicksHead not (p_BH = 0.45).
 
-##### **Step 6 (optional): Jaccard as a third lens**
+### **Step 6 (Optional): Jaccard as a Third Lens**
 
 Both Bray-Curtis and Aitchison use abundance; a taxon at 50% of reads dominates either calculation. A presence/absence metric asks a different question: do communities differ in which taxa are present, or only in how abundant the shared taxa are?
 
@@ -906,7 +943,7 @@ Jaccard and binary (presence/absence) Bray-Curtis are monotonic transformations 
 
 Include this third metric if your question is specifically about membership (e.g. "do antibiotic-treated guts lose taxa?"). For composition questions broadly (most studies), the original two suffice.
 
-#### **Taxonomy barplots**
+## **9. Taxonomy Barplots**
 
 Taxonomy barplots give a visual overview of which microbial groups dominate each sample, and are usually the first figure people look at. Merge rare taxa into an "Other" category to keep the plot readable; beyond about 10 categories the colours become indistinguishable.
 
@@ -943,17 +980,19 @@ Each bar is one sample; colours show the proportion of each taxon. Look for taxa
 
 A lot of "Unknown" or "unassigned" at genus level can mean (a) genuinely novel bacteria absent from the reference database, (b) classification confidence too low for genus-level assignment, or (c) a problem in the classification step. Comparing SILVA and RDP results helps distinguish these.
 
-## **2. Going Further in R**
+## **10. Differential Abundance**
 
-Differential abundance testing answers "which specific taxa drive the differences?" Indicator species analysis answers "which taxa are diagnostic of each group?"
+Differential abundance testing answers "which specific taxa drive the differences?" (Indicator species analysis, Section 11, answers a related question: which taxa are diagnostic of each group?)
 
-### **Why you can't just test each taxon individually**
+### **Why You Can't Test Each Taxon on Its Own**
 
 **Multiple testing.** With 500 taxa tested at p < 0.05, you would expect ~25 false positives by chance. Proper DA tools control this by adjusting p-values (FDR/Benjamini-Hochberg, Holm, or Bonferroni), so the results you keep are more trustworthy.
 
 **Compositionality.** When you sequence a sample, the instrument produces a fixed number of reads, so counts are relative abundances in disguise: they tell you each taxon's proportion, not its absolute cell count. Because proportions must sum to 100%, taxa are not independent. If one taxon takes more of the pie, the others must take less, even if their absolute abundance did not change.
 
-A concrete example: a gut sample with 1,000 cells each of Species A, B, and C yields ~1,000 reads each from 3,000 total. If a treatment doubles A (to 2,000 cells) while B and C are unchanged, the true total is 4,000 cells but the instrument still returns 3,000 reads: A ≈ 1,500, B ≈ 750, C ≈ 750. It now looks like B and C dropped 25% when they did not change at all. A naive test would falsely report a decrease in B and C. This happens whenever any taxon truly changes, and is worse when dominant taxa change.
+A concrete example. A gut sample with 1,000 cells each of Species A, B, and C yields ~1,000 reads each from 3,000 total. If a treatment doubles A (to 2,000 cells) while B and C are unchanged, the true total is 4,000 cells but the instrument still returns 3,000 reads: A ≈ 1,500, B ≈ 750, C ≈ 750.
+
+It now looks like B and C dropped 25% when they did not change at all. A naive test would falsely report a decrease in B and C. This happens whenever any taxon truly changes, and is worst when a dominant taxon changes.
 
 How our tools handle it:
 
@@ -966,11 +1005,11 @@ Compositionality matters most when (a) testing differential abundance, (b) corre
 
 **Our approach:** Bray-Curtis for continuity with the ecological literature plus Aitchison as the compositionally correct complement; for differential abundance, run ANCOM-BC2 and MaAsLin2 and report the consensus.
 
-### **Differential abundance with ANCOM-BC2**
+### **Differential Abundance with ANCOM-BC2**
 
 ANCOM-BC2 estimates a sample-specific bias term (how much each sample's depth and technical factors shift observed abundances from truth), corrects for it, then tests each taxon with a linear model and multiple-testing correction.
 
-Key features: handles compositionality through bias correction; detects **structural zeros** (taxa genuinely absent from a whole group, not merely undersampled); runs a **sensitivity analysis** across pseudo-count values; and controls FDR across all taxa.
+Key features: handles compositionality through bias correction; detects **structural zeros** (taxa genuinely absent from a whole group, not undersampled); runs a **sensitivity analysis** across pseudo-count values; and controls FDR across all taxa.
 
 Use `ps_raw`. ANCOM-BC2 performs its own normalisation; applying SRS first interferes with the bias correction.
 
@@ -978,6 +1017,8 @@ Use `ps_raw`. ANCOM-BC2 performs its own normalisation; applying SRS first inter
 library(ANCOMBC)
 set.seed(123)
 
+# Runtime: seconds on a toy set, several minutes with pairwise + sensitivity
+# on real data — let it run.
 da_ancom <- ancombc2(
     data         = ps_raw,             # raw phyloseq (NOT ps_srs)
     tax_level    = "genus",
@@ -1005,7 +1046,7 @@ Parameters:
 - `p_adj_method = "holm"` is a step-down Bonferroni: more powerful than Bonferroni while controlling family-wise error. `"BH"` controls FDR (more permissive, more results).
 - `prv_cut = 0.10` removes taxa in fewer than 10% of samples (rare taxa lack power and add noise).
 - `struc_zero = TRUE` flags taxa completely absent from one group, which cannot be tested with standard linear models.
-- `neg_lb = FALSE` is the default and what this workflow uses. It controls whether an asymptotic lower bound is used when deciding that a taxon is structurally zero in a group. The ANCOMBC documentation recommends `TRUE` only when each group holds roughly 30 or more samples; below that the bound is unstable and declares extra structural zeros, which then appear in your results as strong, highly significant differences that are really just under-sampling. Set it to `TRUE` only if every level of `group` has ≥30 samples — the worked example here has four per group, so it stays `FALSE` — and check `?ancombc2` for the exact wording in your installed version.
+- `neg_lb = FALSE` (the default, used here) controls the lower bound for calling a taxon structurally absent from a group. **Leave it FALSE unless each group holds roughly 30 or more samples** — below that the bound is unstable and invents structural zeros, which surface as strong, highly significant differences that really reflect under-sampling. The worked example has four per group, so it stays FALSE; check `?ancombc2` for the exact wording in your version.
 - `pseudo_sens = TRUE` tests whether results hold across pseudo-count values (0.1, 0.5, 1.0); robustness shows in `passed_ss`.
 
 Output columns (one set per non-reference level of the grouping variable; with Takapourewa as reference you get Zealandia and YoungNicksHead columns):
@@ -1022,7 +1063,7 @@ sig_ancom <- da_ancom$res %>%
   filter(diff_SiteZealandia == TRUE & passed_ss_SiteZealandia == TRUE)
 ```
 
-### **Differential abundance with MaAsLin2**
+### **Differential Abundance with MaAsLin2**
 
 MaAsLin2 fits a generalised linear model to each taxon, applying TSS normalisation and LOG transformation by default.
 
@@ -1099,11 +1140,9 @@ Parameters:
 
 The output folder contains `all_results.tsv` (every association), `significant_results.tsv` (q < 0.25 by default), per-association plots in `figures/`, and a summary heatmap. Key columns: `feature`, `metadata`, `value`, `coef` (direction and magnitude), `stderr`, `pval`, `qval`.
 
-### **A note on ALDEx2**
+**An optional third method.** If ANCOM-BC2 and MaAsLin2 disagree, ALDEx2 is a useful tie-breaker — same pattern, `ps_raw` in, CLR applied internally via Monte Carlo sampling from a Dirichlet posterior. Reporting the consensus of all three is the most defensible result, but two is the default.
 
-If you want a third method, ALDEx2 follows the same pattern: use `ps_raw` (it applies CLR internally via Monte Carlo sampling from a Dirichlet posterior). It is a useful tie-breaker when ANCOM-BC2 and MaAsLin2 disagree. The consensus across all three is the most defensible result to report.
-
-### **Indicator species analysis**
+## **11. Indicator Species**
 
 While differential abundance asks "is this taxon more or less abundant in group A vs B?", indicator species analysis asks "which taxa are most diagnostic of each group?"
 
@@ -1155,6 +1194,8 @@ print(sig_indicators_fdr)
 
 Correcting on the filtered subset is the more tempting of the two, because the code is shorter and the result looks better. It is wrong in one direction only: it always reports more indicators than are defensible.
 
+## **12. Figures and Reproducibility**
+
 ### **Figures**
 
 A typical 16S paper includes:
@@ -1176,7 +1217,7 @@ sessionInfo()
 
 Keep this output alongside your results. For longer-term reproducibility, use `renv::snapshot()` to lock package versions.
 
-## **Common Pitfalls to Avoid**
+## **Troubleshooting and Common Pitfalls**
 
 **Pseudoreplication.** The most common analytical error in host-microbiota studies: treating non-independent samples as independent (multiple swabs from one animal, co-housed mice that share microbes, technical replicates counted as biological). Identify your true experimental unit and either analyse at that level or use a mixed model with the grouping variable as a random effect.
 
@@ -1200,8 +1241,45 @@ Keep this output alongside your results. For longer-term reproducibility, use `r
 
 **Technical vs biological replicates.** A technical replicate measures pipeline noise; a biological replicate captures biological variation. Your n is the number of biological replicates. Five animals sequenced in triplicate is n = 5, not 15. Pool technical replicates (combine reads) or average them (compute the metric per replicate, then mean per biological sample).
 
-**Simpson's paradox.** A trend within subgroups can reverse when subgroups are pooled. Always check whether your main result holds within each level of potential confounders, and include confounders in your model (`~ Site + Sex`, not just `~ Sex`).
+**Simpson's paradox.** A trend within subgroups can reverse when subgroups are pooled. Always check whether your main result holds within each level of potential confounders, and include confounders in your model (`~ Site + Sex`, not `~ Sex` alone).
 
 **The ecological fallacy.** Group-level correlations need not apply to individuals. Higher average *Akkermansia* in healthy populations does not mean a high-*Akkermansia* individual is less likely to be sick. Be explicit about whether your unit of inference is the individual, the group, or the sample.
 
 **Independence matters more than sample size.** Ten truly independent replicates give more power than 50 pseudoreplicated measurements from 5 animals. For non-independent data (repeated measures, co-housed animals, nested designs), use mixed models, not more samples from the same limited pool.
+
+## **Appendices**
+
+### **Appendix A: References**
+
+The primary literature behind the method choices in this document. Record your own package versions with `sessionInfo()` and cite the tools you actually ran (`citation("phyloseq")` and equivalents).
+
+| Topic | Reference |
+| --- | --- |
+| Rarefaction debate (against) | McMurdie & Holmes 2014, *PLoS Computational Biology* 10(4):e1003531 |
+| Rarefaction re-evaluated (for) | Schloss 2024, *mSphere* 9(1):e00355-23, and the companion 9(2):e00354-23 |
+| DA-method benchmarking | Nearing et al. 2022, *Nature Communications* 13:342 |
+| Indicator species / IndVal | Dufrêne & Legendre 1997, *Ecological Monographs* 67(3):345-366 |
+
+### **Appendix B: Normalisation Methods**
+
+SRS is the primary method (Section 6). The rest are here for reference; the workflow uses SRS plus internal rCLR and touches the others only through the tools that apply them.
+
+**CLR (Centred Log-Ratio)** divides each count by the sample's geometric mean, then takes the log. This removes the compositional constraint and moves data into a space where Euclidean distance is appropriate; it is what makes Aitchison distance work. CLR is not appropriate for alpha diversity, and it is sensitive to zeros (you cannot log zero), which is why we use the robust CLR (rCLR) variant that skips zeros.
+
+**TSS (Total Sum Scaling)** divides each count by the sample total to get proportions. Fine for taxonomy barplots and as input to some DA tools, but on its own it does not correct for compositional bias.
+
+**CSS (Cumulative Sum Scaling)** is a quantile-based normalisation from metagenomeSeq, more robust than simple TSS. Available as a normalisation option in MaAsLin2.
+
+### **Appendix C: Thresholds and Resource Figures**
+
+The numbers used across the walkthrough, in one place. Each is a default with a reason; change it only with a reason of your own.
+
+| Threshold | Value | Where | Why |
+| --- | --- | --- | --- |
+| Depth floor | 1,000 reads | Section 6 | Below this, richness is dominated by sampling effort, not biology. Treat < 10,000 with caution. |
+| Cmin (SRS target) | shallowest sample's total | Section 6 | Every sample is scaled to this depth; if < ~1,000, drop that sample and recalculate. |
+| `prv_cut` (prevalence filter) | 0.10 | Section 10 | Removes taxa in fewer than 10% of samples — they lack power and add noise. |
+| `lib_cut` (ANCOM-BC2) | 1,000 reads | Section 10 | Drops samples below the depth floor before testing. |
+| `neg_lb` ≥30 rule | 30 samples/group | Section 10 | Below this the structural-zero lower bound is unstable; keep `neg_lb = FALSE`. |
+| NMDS stress | < 0.05 excellent, < 0.1 good, < 0.2 acceptable, > 0.2 unreliable | Section 8 | How faithfully the 2D plot preserves the true distances. |
+| IndVal strength | > 0.5 strong (max 1.0) | Section 11 | Perfect indicators are rare; treat 0.5 as the practical bar. |

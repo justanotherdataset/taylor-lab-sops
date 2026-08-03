@@ -2,9 +2,11 @@
 
 # **CONCOMPRA Pipeline: Consensus OTUs on NeSI**
 
-**v2.0** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S
+**v2.1** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S
 
-This document covers the CONCOMPRA pipeline on NeSI Mahuika: installation, run configuration, submission, verification, post-processing (taxonomy, alignment, phylogeny), and preparing outputs for R. CONCOMPRA builds reference-free consensus OTUs rather than aligning reads to a reference, and it **runs after `SOP_EMU_NeSI.md`, not instead of it**: it takes that pipeline's filtered reads as its input, builds its SILVA SINTAX database from the Emu SILVA bundle installed there, and uses the Emu taxonomy as its only validation check. Its outputs feed the same R analysis (`SOP_R_Analysis.md`).
+This document covers the CONCOMPRA pipeline on NeSI Mahuika: installation, run configuration, submission, verification, post-processing (taxonomy, alignment, phylogeny), and preparing outputs for R. CONCOMPRA builds reference-free consensus OTUs rather than aligning reads to a reference. Its outputs feed the same R analysis (`SOP_R_Analysis.md`).
+
+It **runs after `SOP_EMU_NeSI.md`, not instead of it**: it takes that pipeline's filtered reads as its input, builds its SILVA SINTAX database from the Emu SILVA bundle installed there, and uses the Emu taxonomy as its only validation check.
 
 Paths use `<your_nesi_project_code>` and `<your_project>` placeholders. Substitute your own throughout.
 
@@ -13,7 +15,9 @@ Paths use `<your_nesi_project_code>` and `<your_project>` placeholders. Substitu
 This document assumes you have:
 
 - **A NeSI account and project code**, and enough bash and SLURM to submit a job, read a `.err` file and check `squeue`. If you do not, work through Section 1 of `SOP_EMU_NeSI.md` first — it is the only document in this set that teaches the cluster, and this one does not repeat it.
+
 - **Your Nanopore reads already basecalled, demultiplexed and quality/length-filtered**, as one per-sample `.fastq` file in a single directory. This document calls that directory `filtered/` throughout; it is the output of the read-filtering step in `SOP_EMU_NeSI.md`. CONCOMPRA does its own primer-chopping and `filtlong` quality pass on top of that filtering — it does not replace it.
+
 - **A sample metadata sheet** as a `.csv`, one row per sample, sample ID in the first column, using exactly the sample IDs that appear in your fastq filenames.
 
 This document does not cover basecalling, demultiplexing or read filtering.
@@ -46,11 +50,25 @@ STAGE 6: Hand off to R
 
 ---
 
-## **1. Overview**
+## **1. Understanding your data**
 
-CONCOMPRA (Stock et al., 2025) clusters primer-trimmed reads (UMAP/OPTICS), builds a per-sample consensus sequence per cluster with `lamassemble`, dereplicates across samples, detects chimeras, and outputs an OTU table and consensus sequences.
+CONCOMPRA turns your filtered Nanopore reads into **OTUs** — operational taxonomic units, groups of near-identical sequences that stand in for "a kind of organism" when you cannot put a species name to them. Where Emu asks *which known species are here* by matching each read to a reference database, CONCOMPRA asks *what distinct sequences are here*, whether or not any database knows them.
 
-Use it alongside Emu. Emu gives fast alignment-based taxonomy and relative abundance against curated databases; CONCOMPRA gives reference-free consensus sequences (de novo OTUs) for novel or poorly-resolved taxa and for sequence-level work like trees and primer-mismatch checks.
+It never consults a reference to decide what counts as an OTU — that is what **reference-free**, or **de novo** ("from scratch"), means — so it can resolve novel or poorly-catalogued taxa that Emu can only return as "unclassified".
+
+It gets there in four moves, and the output files are named after them:
+
+- **Clustering.** Reads from one sample are grouped by sequence similarity (the algorithms are UMAP and OPTICS; you never call them directly). Each cluster is one candidate OTU.
+
+- **Consensus.** For each cluster, `lamassemble` collapses its reads into a single best-estimate sequence — the **consensus** — averaging out per-read Nanopore errors.
+
+- **Dereplication.** Identical consensus sequences from different samples are merged into one OTU, so a taxon seen in ten samples is one row, not ten.
+
+- **Chimera detection.** A **chimera** is an artificial hybrid sequence formed during PCR, when a half-finished copy of one organism's DNA completes on another's template. It is not a real organism, so CONCOMPRA flags chimeras and sets them aside in a separate file.
+
+The run produces an **OTU table** (OTUs in rows, samples in columns, counts in the cells) and a **consensus FASTA**. Post-processing (Section 7) then names each OTU against SILVA (**SINTAX** classification), aligns the sequences (**MAFFT**), and builds a tree (**FastTree**) so you can place novel OTUs next to their nearest known relatives.
+
+Use it alongside Emu. Emu gives fast alignment-based taxonomy and relative abundance against curated databases; CONCOMPRA gives reference-free consensus sequences for novel or poorly-resolved taxa and for sequence-level work like trees and primer-mismatch checks.
 
 | Pipeline | What it gives | Best for |
 |---|---|---|
@@ -64,6 +82,8 @@ Run both on the same deduplicated input and compare.
 ## **2. Installation**
 
 Install CONCOMPRA and its conda environment once per project directory, then reuse them across runs and users on that project.
+
+CONCOMPRA's tools are not available as NeSI modules, so you install them into a **conda environment** — a self-contained folder holding a specific version of every package the pipeline needs, isolated from the rest of the system. You build it once from the recipe shipped with CONCOMPRA (`CONCOMPRA.yml`), then `conda activate` it whenever you run the pipeline, much as you `module load` a NeSI tool.
 
 ### **Locations**
 
@@ -100,6 +120,8 @@ conda env create \
     --solver=libmamba
 ```
 
+The solve typically takes 5–15 minutes and prints little while it resolves dependencies. A long silent pause is normal here, not a hang — do not interrupt it.
+
 ### **Verify the environment**
 
 ```bash
@@ -109,7 +131,9 @@ conda list -p /nesi/project/<your_nesi_project_code>/conda_envs/CONCOMPRA
 
 Confirm the upstream pins are present: `filtlong 0.2.1`, `minimap2 2.1.1`, `python 3.11`, `numba 0.60.0`. The environment does not include `medaka`, `racon`, or `samtools`; CONCOMPRA uses `lamassemble` for consensus, so their absence is correct and you should not add them.
 
-An optional activation alias for `~/.bashrc`:
+A missing pin, or a solver error instead of a package list, means the `defaults`-channel strip or the Miniforge requirement above was not met. Remove the half-built environment (`conda env remove -p /nesi/project/<your_nesi_project_code>/conda_envs/CONCOMPRA`) and rebuild before going on; a partially-solved environment fails silently mid-run.
+
+**Optional —** an activation alias for `~/.bashrc`:
 
 ```bash
 alias lab_concompra='module purge && \
@@ -182,7 +206,12 @@ Every line must end in `0`. The previous form of this check named a single liter
 
 ### **Record run metadata**
 
-Capture in a `RUN_METADATA.md` beside the fastqs: flowcell and chemistry (e.g. `FLO-PRO114M`, `SQK-NBD114.96 + EXP-PBC096`); basecaller and model (e.g. `dorado v1.0.2`, `dna_r10.4.1_e8.2_400bps_sup@v5.0.0`); whether the run was interrupted or restarted and how the POD5s were merged; and the duplicate-screen result.
+Capture in a `RUN_METADATA.md` beside the fastqs:
+
+- Flowcell and chemistry (e.g. `FLO-PRO114M`, `SQK-NBD114.96 + EXP-PBC096`).
+- Basecaller and model (e.g. `dorado v1.0.2`, `dna_r10.4.1_e8.2_400bps_sup@v5.0.0`).
+- Whether the run was interrupted or restarted, and how the POD5s were merged.
+- The duplicate-screen result.
 
 ---
 
@@ -192,7 +221,6 @@ Capture in a `RUN_METADATA.md` beside the fastqs: flowcell and chemistry (e.g. `
 
 ```
 /nesi/nobackup/<your_nesi_project_code>/<your_project>/
-├── 03_dedup.sh                   # if dedup was needed (Section 3)
 ├── 05_concompra.sh               # main run submission (Section 5)
 ├── 07_concompra_postprocess.sh   # post-processing submission (Section 7)
 ├── logs/                         # post-processing logs
@@ -321,7 +349,9 @@ conda activate /nesi/project/<your_nesi_project_code>/conda_envs/CONCOMPRA
 bash ./main.sh
 ```
 
-`main.sh` takes no command-line arguments; it `source`s `directory_list.txt` and reads `primer_set.fa` from the working directory, which `--chdir` has set to `concompra/`. `bash ./main.sh` runs your edited copy in that directory (the one with `rm -rf temporary` commented out), not the pristine repo copy. `main.sh` locates its sub-scripts through `TEMPLATE_DIR` (which it reads from `directory_list.txt`), so the job needs nothing from your login shell. The wrapper's `set -euo pipefail` guards its own setup only; `main.sh` runs as a separate process and keeps its own (deliberately lenient) error handling.
+`main.sh` takes no arguments: it `source`s `directory_list.txt` and reads `primer_set.fa` from the working directory, which `--chdir` set to `concompra/`. `bash ./main.sh` runs your edited copy — the one with `rm -rf temporary` commented out — not the repo copy. It finds its sub-scripts through `TEMPLATE_DIR`, so the job needs nothing from your login shell.
+
+The wrapper's `set -euo pipefail` guards its own setup only. `main.sh` runs as a separate process and keeps its own deliberately lenient error handling — which is why Section 6 verifies the outputs on disk rather than trusting the exit code.
 
 **Submit.**
 
@@ -389,7 +419,9 @@ awk -F, 'NR==1 {for(i=2;i<=NF;i++) n[i]=$i; next}
   results/otu_table.csv | sort -n | head -10
 ```
 
-Zero-count samples are not pipeline errors; decide per sample whether to keep them as controls or drop them. A non-empty `clustered_consensus.fasta` with an empty chimera-filtered fasta means everything was called chimeric; check the chimera-detection settings.
+Zero-count samples are not pipeline errors; decide per sample whether to keep them as controls or drop them.
+
+A non-empty `clustered_consensus.fasta` with an empty chimera-filtered fasta means every sequence was called chimeric — usually a sign the input was near-empty or badly degraded rather than a real chimera storm, so check the `.err` log for upstream failures first (Section 6). The chimera step is not exposed through `directory_list.txt`; to change its thresholds you edit the pipeline script directly, the same way you would for any parameter not in the config ([Threads](#threads)).
 
 ### **Cross-check against Emu**
 
@@ -398,6 +430,14 @@ For one or two samples, compare the dominant taxa from Emu with the closest matc
 ---
 
 ## **7. Post-processing: Taxonomy, Alignment, Phylogeny**
+
+Post-processing answers three questions about the OTUs you just built, and runs all three in one short job:
+
+- **What is each OTU?** `vsearch --sintax` compares each consensus sequence to the SILVA reference and assigns a name down to the most confident rank — this is **taxonomic classification**.
+
+- **How do the sequences line up?** **MAFFT** performs a multiple-sequence **alignment**: it stacks the sequences so equivalent positions sit in the same column, which is the input a tree needs.
+
+- **How are they related?** **FastTree** turns that alignment into a **phylogenetic tree**, so you can place novel OTUs next to their nearest known relatives and, later, compute phylogenetic diversity.
 
 One SLURM job filters the chimera-clean fasta to OTUs that have reads, classifies them with `vsearch --sintax`, aligns with MAFFT, and builds a FastTree phylogeny. Run it as a SLURM job rather than on a login node: the SILVA UDB needs about 3 GB of RAM and MAFFT adds more. Runtime is typically under a minute.
 
@@ -417,13 +457,14 @@ mkdir -p /nesi/nobackup/<your_nesi_project_code>/<your_project>/logs
 
 ```bash
 #!/bin/bash
-#SBATCH --job-name=concompra_postprocess
-#SBATCH --account=<your_nesi_project_code>
-#SBATCH --time=02:00:00
-#SBATCH --mem=16G
-#SBATCH --cpus-per-task=16
-#SBATCH --output=logs/postprocess_%j.out
-#SBATCH --error=logs/postprocess_%j.err
+#SBATCH --job-name concompra_postprocess
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/<your_project>
+#SBATCH --time 02:00:00
+#SBATCH --cpus-per-task 16
+#SBATCH --mem 16G
+#SBATCH --output logs/postprocess_%j.out
+#SBATCH --error logs/postprocess_%j.err
 
 # set -euo pipefail: unlike main.sh, this script aborts on first error
 set -euo pipefail
@@ -473,9 +514,11 @@ sbatch 07_concompra_postprocess.sh
 
 **Step 1.** The chimera-clean fasta holds every sequence that survived chimera detection; the OTU table holds every OTU with reads, including some chimera detection later removed. The intersection is the working set. Fewer sequences than OTU-table rows is expected. Read retention in the 70 to 90% range is typical for Nanopore 16S even when the OTU count drops further, because the filter mostly removes low-abundance OTUs.
 
-**Step 2.** `vsearch --sintax` writes a 4-column file: query ID; all hits with confidence scores; strand; and the cutoff-filtered assignment. For phyloseq and any downstream use, take column 4, not column 2. Column 2 lists every hit at every confidence level; column 4 applies the cutoff. Using column 2 silently corrupts taxonomy at low-confidence ranks, usually genus and species. The 0.8 cutoff is the standard SINTAX bootstrap threshold; a higher cutoff yields more `unclassified` calls but more reliable assignments.
+**Step 2.** `vsearch --sintax` writes a 4-column file: query ID; all hits with confidence scores; strand; and the cutoff-filtered assignment. For phyloseq and any downstream use, take column 4, not column 2. Column 2 lists every hit at every confidence level; column 4 applies the cutoff. Using column 2 silently corrupts taxonomy at low-confidence ranks, usually genus and species.
 
-**Step 4.** `FastTree -gtr -nt` builds an approximate maximum-likelihood tree under GTR and reports SH-like local supports by default. For resample-based supports, add `-boot 1000`.
+The 0.8 cutoff is the standard SINTAX bootstrap threshold (a 0–1 confidence score from repeated resampling; higher is more reliable); a higher cutoff yields more `unclassified` calls but more reliable assignments.
+
+**Step 4.** `FastTree -gtr -nt` builds an approximate **maximum-likelihood** tree — the branching pattern most consistent with the aligned sequences — under the **GTR** model, the standard general model of how one DNA base substitutes for another. By default it reports **SH-like local supports**: a 0–1 score on each branch estimating how well the data back that split, higher being more trustworthy. For the more familiar resample-based **bootstrap** supports instead, add `-boot 1000`.
 
 ### **Verifying the outputs**
 
@@ -581,12 +624,13 @@ write.table(cbind(tax_id = keep, tax[keep, ], otu[keep, ]),
 saveRDS(drop.tip(tree, setdiff(tree$tip.label, keep)), "tree_concompra.rds")
 ```
 
-`counts_concompra.tsv` is now in the shape Part 2's Stage 1 describes: substitute its filename for `emu-combined-counts_silva.tsv` there. The rank names are Part 2's (`superkingdom` … not `Domain`), which is what its barplot and `tax_level = "genus"` code expects. Keep `tree_concompra.rds`: Part 2 does not use it, but it lets you add phylogenetic-diversity analyses (UniFrac, Faith's PD) yourself if you want them.
+`counts_concompra.tsv` is now in the shape Part 2's data-loading step (Section 3) describes: substitute its filename for `emu-combined-counts_silva.tsv` there. The rank names are Part 2's (`superkingdom` … not `Domain`), which is what its barplot and `tax_level = "genus"` code expects. Keep `tree_concompra.rds`: Part 2 does not use it, but it lets you add phylogenetic-diversity analyses (UniFrac, Faith's PD) yourself if you want them.
 
 Two things Part 2 does not know about CONCOMPRA output:
 
 - **Counts are integers already.** Part 2's `round()` step is a no-op here; leave it in, and the relative-abundance guard above it will pass.
-- **Prevalence filtering.** Low-prevalence OTUs from per-sample consensus are often genuine rare taxa, so the `prv_cut = 0.10` in Part 2's ANCOM-BC2 call, tuned for Illumina ASV data, may discard real signal. Consider lowering it and say what you used.
+
+- **Prevalence filtering.** Low-prevalence OTUs from per-sample consensus are often genuine rare taxa, so Part 2's `prv_cut = 0.10` — tuned for Illumina **ASV** data (amplicon sequence variants, the exact-sequence features short-read pipelines call, the short-read counterpart of these consensus OTUs) — may over-filter here. **Start at `prv_cut = 0.05`** (half the Illumina default), record what you used, and set `prv_cut = 0` to disable prevalence filtering entirely when rare taxa are the study's point.
 
 **Template.** CONCOMPRA's `CONCOMPRA_local_postprocessing.R` in the upstream repo is a starting point; adapt its paths to this folder.
 
@@ -598,7 +642,11 @@ Two things Part 2 does not know about CONCOMPRA output:
 
 Usually duplicate read IDs in the input. `filtlong 0.2.1` aborts on the first duplicate read name; the run then continues on empty input, producing OPTICS "empty vocabulary" errors and empty consensus files. Check the `.err` log for filtlong duplicate-name errors, run the [duplicate screen](#screen), and if duplicates are present [deduplicate](#deduplicate) and re-run. Do not replace or downgrade filtlong; its version is pinned for compatibility.
 
-Other causes: a mis-configured `directory_list.txt` ([Run configuration file](#run-configuration-file)) — an unset `MIN`/`MAX` discards every read, and an unset `TEMPLATE_DIR`/`PRIMER_SET` breaks the run silently; primer headers not named `head`/`tail` ([Primer file](#primer-file)), which leaves almost no reads after primer-chop; or too few reads per sample for clustering.
+Other causes:
+
+- A mis-configured `directory_list.txt` ([Run configuration file](#run-configuration-file)) — an unset `MIN`/`MAX` discards every read, and an unset `TEMPLATE_DIR`/`PRIMER_SET` breaks the run silently.
+- Primer headers not named `head`/`tail` ([Primer file](#primer-file)), which leaves almost no reads after primer-chop.
+- Too few reads per sample for clustering.
 
 ### **Empty sintax output**
 
@@ -636,7 +684,7 @@ Rebuild the environment only if `CONCOMPRA.yml` changed materially. Build a date
 
 ### **The temporary directory**
 
-CONCOMPRA's `main.sh` ends with `rm -rf temporary`, so per-sample intermediates are deleted on a successful run. If you need them for debugging, comment that line out before running. After analysis is finalised you can delete the directory yourself:
+CONCOMPRA deletes `temporary/` on a successful run. Section 5 covers commenting that out before your first run to keep the per-sample intermediates for debugging. Once your analysis is final, delete the directory yourself:
 
 ```bash
 cd /nesi/nobackup/<your_nesi_project_code>/<your_project>/concompra/
@@ -667,9 +715,12 @@ The script is committed to this repository as [`reformat_silva_for_sintax.py`](r
 
 ```bash
 # 1. Reformat (about 7 seconds for ~412k records; expect 0 dropped).
-#    Copy the reformatter from this repository into the database directory first.
+#    Copy the reformatter into the database directory, then cd to the SILVA
+#    bundle SOP_EMU_NeSI.md installed — the directory that holds Emu's
+#    species_taxid.fasta (its SILVA database download). If you do not have it,
+#    build it via SOP_EMU_NeSI.md's database step first.
 cp reformat_silva_for_sintax.py /nesi/project/<your_nesi_project_code>/databases/silva_emu_sintax/
-cd <where Emu's species_taxid.fasta lives>
+cd /nesi/project/<your_nesi_project_code>/databases/emu/silva/   # the Emu SILVA bundle
 python /nesi/project/<your_nesi_project_code>/databases/silva_emu_sintax/reformat_silva_for_sintax.py \
     species_taxid.fasta silva_sintax.fa
 
@@ -685,6 +736,8 @@ vsearch --makeudb_usearch silva_sintax.fa --output silva_sintax.udb
 mv silva_sintax.fa silva_sintax.udb \
    /nesi/project/<your_nesi_project_code>/databases/silva_emu_sintax/
 ```
+
+Confirm the file is present before reformatting: `ls species_taxid.fasta` should list it; "No such file" means you are in the wrong directory or the Emu SILVA database was never downloaded.
 
 Record in the directory's `README.md`: source SILVA release and Emu bundle version, build date, reformatter commit, and record counts in and out (they should match).
 

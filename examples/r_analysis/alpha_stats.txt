@@ -1,0 +1,53 @@
+Alpha diversity tests, by Environment (SRS-normalised ps_srs)
+
+Group medians:
+  Environment Observed  Shannon
+1       Human      590 3.855770
+2  Freshwater     1656 3.432995
+3      Saline      949 4.560795
+
+== Observed richness ==
+Kruskal-Wallis:
+
+Results of Hypothesis Test
+--------------------------
+
+Alternative Hypothesis:          
+
+Test Name:                       Kruskal-Wallis rank sum test
+
+Data:                            values by group
+
+Test Statistic:                  Kruskal-Wallis chi-squared = 4.742222
+
+Test Statistic Parameter:        df = 2
+
+P-value:                         0.09337692
+
+Pairwise Wilcoxon (BH-adjusted):
+               Human Freshwater
+Freshwater 0.1798202         NA
+Saline     0.2169830  0.5367965
+
+== Shannon ==
+Kruskal-Wallis:
+
+Results of Hypothesis Test
+--------------------------
+
+Alternative Hypothesis:          
+
+Test Name:                       Kruskal-Wallis rank sum test
+
+Data:                            values by group
+
+Test Statistic:                  Kruskal-Wallis chi-squared = 9.408889
+
+Test Statistic Parameter:        df = 2
+
+P-value:                         0.009054943
+
+Pairwise Wilcoxon (BH-adjusted):
+                Human Freshwater
+Freshwater 0.29770230         NA
+Saline     0.02637363 0.01298701

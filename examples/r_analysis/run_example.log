@@ -1,0 +1,139 @@
+Loaded 4193 taxa x 23 samples
+            
+             blank sample
+  Freshwater     0      5
+  Human          0      9
+  Mock           3      0
+  Saline         0      6
+decontam (illustrative) flagged 353 taxa; NOT removed (Mock is not a true blank)
+
+----- Fig 02 decontam prevalence (illustrative) -----
+  [OK]
+ps_raw: 4190 taxa x 20 samples
+
+----- Fig 01 input sanity (library sizes) -----
+  [OK]
+
+----- Fig 03 read depth by group -----
+  [OK]
+
+----- Fig 05 exploratory PCoA (proportions) -----
+  [OK]
+Warning message:
+`aes_string()` was deprecated in ggplot2 3.0.0.
+ℹ Please use tidy evaluation idioms with `aes()`.
+ℹ See also `vignette("ggplot2-in-packages")` for more information.
+ℹ The deprecated feature was likely used in the phyloseq package.
+  Please report the issue at <https://github.com/joey711/phyloseq/issues>. 
+
+----- Fig 04 rarefaction curve -----
+  [OK]
+Normalising to Cmin = 53094 reads
+
+----- Fig 06 library sizes before vs after SRS -----
+  [OK]
+alpha KW p: Observed=0.09338 Shannon=0.009055
+
+----- Fig 07 alpha diversity -----
+  [OK]
+PERMANOVA Bray R2=0.28 p=0.0001 | Aitchison R2=0.48 p=0.0001
+
+----- Fig 08 beta diversity PCoA -----
+  [OK]
+betadisper p: Bray=0.406 Aitchison=0.583
+
+----- Fig 09 dispersion (betadisper centroids) -----
+  [OK]
+
+----- Fig 10 taxonomy barplot -----
+  [OK]
+
+----- Fig 11 ANCOM-BC2 log fold changes -----
+Loading required package: foreach
+Loading required package: rngtools
+Conducting sensitivity analysis for pseudo-count addition to 0s ...
+For taxa that are significant but do not pass the sensitivity analysis,
+they are marked in the 'passed_ss' column and will be treated as non-significant in the 'diff_robust' column.
+For detailed instructions on performing sensitivity analysis, please refer to the package vignette.
+ANCOM-BC2 significant (diff & passed_ss): 8 taxon-contrasts
+`height` was translated to `width`.
+`height` was translated to `width`.
+  [OK]
+Warning messages:
+1: In pt(abs(W), df = dof, lower.tail = FALSE) : NaNs produced
+2: In pf(W_global, df1 = length(beta_hat_sub_i), df2 = dof_i, lower.tail = TRUE) :
+  NaNs produced
+3: In pf(W_global, df1 = length(beta_hat_sub_i), df2 = dof_i, lower.tail = FALSE) :
+  NaNs produced
+4: In pf(W_global, df1 = length(beta_hat_sub_i), df2 = dof_i, lower.tail = TRUE) :
+  NaNs produced
+5: In pf(W_global, df1 = length(beta_hat_sub_i), df2 = dof_i, lower.tail = FALSE) :
+  NaNs produced
+6: In pt(abs(W), df = dof, lower.tail = FALSE) : NaNs produced
+7: `geom_errorbarh()` was deprecated in ggplot2 4.0.0.
+ℹ Please use the `orientation` argument of `geom_errorbar()` instead. 
+
+----- Fig 12 indicator species -----
+Indicators: tested=4081, raw p<0.05=2202, FDR<0.05=1399
+  [OK]
+
+----- Fig 13 publication figure -----
+`height` was translated to `width`.
+`height` was translated to `width`.
+  [OK]
+
+----- Fig 14 core microbiome (supplementary) -----
+
+microbiome R package (microbiome.github.com)
+    
+
+
+ Copyright (C) 2011-2025 Leo Lahti, 
+    Sudarshan Shetty et al. <microbiome.github.io>
+    
+ 
+    Note: we recommend switching to the SummarizedExperiment
+    framework, see microbiome.github.io/OMA and the mia package.
+    Minimum maintenance is provided microbiome R package but the
+    development efforts have switched to mia.
+
+Attaching package: ‘microbiome’
+
+The following object is masked from ‘package:ggplot2’:
+
+    alpha
+
+The following object is masked from ‘package:indicspecies’:
+
+    coverage
+
+The following object is masked from ‘package:vegan’:
+
+    diversity
+
+The following object is masked from ‘package:base’:
+
+    transform
+
+Core genera per environment (det 0.1%, prev 50%):
+     Human Freshwater     Saline 
+        21         71         13 
+  [OK]
+
+=============================================================
+Figures produced (14):
+  02_decontam_prevalence
+  01_input_sanity
+  03_read_depth_by_group
+  05_explore_pcoa
+  04_rarefaction
+  06_srs_before_after
+  07_alpha_diversity
+  08_beta_pcoa
+  09_beta_dispersion
+  10_taxonomy_barplot
+  11_ancombc2_lfc
+  12_indicator_species
+  13_publication_figure
+  14_core_microbiome
+Done.

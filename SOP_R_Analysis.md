@@ -15,6 +15,8 @@ The examples use Cam's tuatara PhD data, so the variable names (Site, Sex, Speci
 - **What this does not cover.** Producing the count table (see Part 1 for Nanopore, `SOP_READBASED_NeSI.md` for Illumina shotgun); short-read ASV workflows (DADA2); non-independent designs beyond the pointers given (repeated measures, nested, co-housed — see Troubleshooting).
 - **If you have no count table yet,** stop here and start with Part 1.
 
+**Worked example.** Every figure below is real output from running this workflow on the public **GlobalPatterns** 16S dataset (Caporaso et al. 2011), grouped into three environments (Human, Freshwater, Saline). It is reproducible from `examples/r_analysis/` with `Rscript run_example.R`. Object names and code follow this SOP; only the grouping variable is adapted to that data. Each caption states what to look for.
+
 ---
 
 ## **Quick Roadmap: What You'll Do**
@@ -304,6 +306,10 @@ cat("\nAfter decontam:", nrow(counts_raw), "taxa,", ncol(counts_raw), "samples\n
 
 Record which contaminants were found and report this in your methods. Common kit contaminants include *Pseudomonas*, *Acinetobacter*, *Sphingomonas*, and *Bradyrhizobium*.
 
+![decontam prevalence-score histogram (illustrative)](examples/r_analysis/figures/02_decontam_prevalence.png)
+
+*Expected output (illustrative — GlobalPatterns has no extraction blanks, so the Mock community stands in as negatives and nothing is removed downstream). Bars count taxa at each decontam score; taxa left of the dashed P < 0.1 line are flagged. With real blanks, these would be your candidate contaminants.*
+
 **Build `ps_raw`, your raw-counts phyloseq object.** This bundles counts, taxonomy, and metadata into one object. When you subset samples or remove taxa later, all three tables stay synchronised.
 
 ```r
@@ -350,6 +356,10 @@ barplot(sort(sample_sums(ps_raw)), las = 2, ylab = "Total reads",
         main = "Library sizes per sample")
 ```
 
+![Library sizes per sample](examples/r_analysis/figures/01_input_sanity.png)
+
+*Expected output. Total reads per sample, sorted and coloured by group. In the example every sample clears the 1,000-read floor, and depth spans roughly 50,000 to over 2 million reads — a wide but workable range.*
+
 Flag samples below ~1,000 reads as unreliable and treat those below ~10,000 with caution. A 10-fold range between highest and lowest depth is common and manageable with normalisation; 100-fold suggests a problem. Also check whether library size is correlated with your treatment groups:
 
 ```r
@@ -358,6 +368,10 @@ boxplot(sample_sums(ps_raw) ~ sample_data(ps_raw)$Site,
 # If treated samples have systematically lower depth than controls,
 # downstream results may be confounded by depth.
 ```
+
+![Read depth by group](examples/r_analysis/figures/03_read_depth_by_group.png)
+
+*Expected output. Read depth per group on a log scale. Look for one group sitting systematically deeper than the others, which would confound diversity with sequencing effort; in the example the groups overlap.*
 
 **Check for batch effects.** If samples were sequenced across multiple runs or extracted on different days, check whether batch drives more variation than biology. If batch explains more variation than your treatment, your biological results may be unreliable.
 
@@ -381,6 +395,10 @@ plot_ordination(ps_rel_qc, quick_ord, color = "Batch") +
 #         permutations = how(nperm = 9999), by = "terms")
 # Swap Batch for Plate to check plate effects the same way.
 ```
+
+![Exploratory PCoA](examples/r_analysis/figures/05_explore_pcoa.png)
+
+*Expected output. A first PCoA (Bray-Curtis on proportions) coloured by group — the most informative look before any test. Strong separation this early flags the main structure; in the example the three environments pull well apart.*
 
 Proportions remove the gross depth effect but not the detection effect — a deeper sample still shows more rare taxa. If batch comes out significant here, check it against the depth boxplot above before concluding it is a batch effect.
 
@@ -453,6 +471,10 @@ abline(v = min(rowSums(t(counts_raw))))
 
 Each line is a sample; the x-axis is subsampling depth, the y-axis is taxa detected. Curves should plateau; if still rising steeply, that sample was not sequenced deeply enough. The vertical line marks your shallowest sample.
 
+![Rarefaction curves](examples/r_analysis/figures/04_rarefaction.png)
+
+*Expected output. Each line is a sample, coloured by group; the dashed vertical line is Cmin (the shallowest sample). Freshwater samples reach the most taxa. Curves still climbing steeply at Cmin would warn of under-sequencing.*
+
 **Run SRS to build `ps_srs`:**
 
 ```r
@@ -493,6 +515,10 @@ ps_srs <- phyloseq(otu_table(counts_srs, taxa_are_rows = TRUE),
 # Both objects must now agree on samples. If this stops, do not continue.
 stopifnot(identical(sample_names(ps_raw), sample_names(ps_srs)))
 ```
+
+![Library sizes before vs after SRS](examples/r_analysis/figures/06_srs_before_after.png)
+
+*Expected output. Filled points are raw depth, open points after SRS. Every sample is scaled to the same Cmin (here 53,094 reads, dashed line), which removes depth as a driver of the analyses built on `ps_srs`.*
 
 ## **7. Alpha Diversity**
 
@@ -576,6 +602,10 @@ p_sha
 ```
 
 In the boxplots, the central line is the median, the box is the interquartile range, and the whiskers extend to the most extreme points within 1.5× the IQR. Asterisks mark significance: \* p < 0.05, \*\* p < 0.01, \*\*\* p < 0.001, \*\*\*\* p < 0.0001, `ns` not significant. A visible trend that is not significant usually means the sample size is too small or within-group variation too large.
+
+![Alpha diversity by group](examples/r_analysis/figures/07_alpha_diversity.png)
+
+*Expected output. Observed richness and Shannon by group, with the Kruskal-Wallis p-value and BH-adjusted brackets drawn from the adjusted matrix. In the example Observed richness does not differ (p = 0.093) but Shannon does (p = 0.009) — a difference in evenness, not richness.*
 
 Repeat for other variables. With exactly two groups there is no omnibus step, so the Wilcoxon test is the reported result and no adjustment across comparisons is needed:
 
@@ -705,6 +735,10 @@ plot_ordination(ps_srs, pcoa_bray, color = "Sex") +
 
 Closer points have more similar communities. The axis labels show how much total variation each axis captures. Ellipses show the 95% confidence region per group; non-overlapping ellipses suggest groups differ, but only PERMANOVA confirms it.
 
+![PCoA: Bray-Curtis and Aitchison](examples/r_analysis/figures/08_beta_pcoa.png)
+
+*Expected output. PCoA on Bray-Curtis (SRS) and robust Aitchison (raw counts); axis labels show variance explained. The three groups separate on both metrics (PERMANOVA R² = 0.28 and 0.48, both p = 0.0001), so the result does not hinge on one distance.*
+
 **Negative eigenvalues.** PCoA on Bray-Curtis sometimes produces negative eigenvalues because Bray-Curtis is semi-metric. Small ones are normal and can be ignored. If they are large, the Aitchison PCoA (a true metric distance) is more reliable.
 
 **NMDS fallback.** If PCoA produces many large negative eigenvalues, use NMDS:
@@ -813,6 +847,10 @@ plot_betadisper_distance(disp_site_ait,   "Aitchison: distance to centroid by Si
 ```
 
 In the centroid plot, each point is a sample, each diamond a group centroid, and the ray length is the distance betadisper tests — long rays mean high dispersion. In the boxplot, the y-axis is each sample's distance to its own centroid; a visibly higher box means the test will likely return p < 0.05.
+
+![betadisper centroid plots](examples/r_analysis/figures/09_beta_dispersion.png)
+
+*Expected output. Each point is a sample joined by a ray to its group centroid (diamond), for both metrics. Roughly comparable spread across groups means dispersion is not driving the PERMANOVA (betadisper p = 0.38 and 0.56 in the example).*
 
 The centroid plot shows the spatial pattern, the boxplot the magnitude. For a thesis figure publish the centroid plot; keep the boxplot for supplementary material or for diagnosing a surprising result.
 
@@ -978,6 +1016,10 @@ ggplot(gen_melt, aes(x = Sample, y = Abundance, fill = genus)) +
 
 Each bar is one sample; colours show the proportion of each taxon. Look for taxa that appear more abundant in one group, or samples with unusual compositions. These plots are descriptive only: a taxon that looks bigger in one group may not be significant. For that, use the differential abundance tests below.
 
+![Phylum composition by group](examples/r_analysis/figures/10_taxonomy_barplot.png)
+
+*Expected output. Relative phylum abundance per sample, faceted by group, top 10 phyla plus Other. Freshwater is Cyanobacteria-rich while the marine and human samples are dominated by Proteobacteria — descriptive leads for the tests below, not results.*
+
 A lot of "Unknown" or "unassigned" at genus level can mean (a) genuinely novel bacteria absent from the reference database, (b) classification confidence too low for genus-level assignment, or (c) a problem in the classification step. Comparing SILVA and RDP results helps distinguish these.
 
 ## **10. Differential Abundance**
@@ -1062,6 +1104,10 @@ Output columns (one set per non-reference level of the grouping variable; with T
 sig_ancom <- da_ancom$res %>%
   filter(diff_SiteZealandia == TRUE & passed_ss_SiteZealandia == TRUE)
 ```
+
+![ANCOM-BC2 log fold changes](examples/r_analysis/figures/11_ancombc2_lfc.png)
+
+*Expected output. Genera passing both the difference test and the sensitivity analysis, by log fold change versus the reference group. In the example 8 genera are significant — marine taxa higher in Saline, human commensals lower — with points to the right meaning more abundant.*
 
 ### **Differential Abundance with MaAsLin2**
 
@@ -1194,6 +1240,10 @@ print(sig_indicators_fdr)
 
 Correcting on the filtered subset is the more tempting of the two, because the code is shorter and the result looks better. It is wrong in one direction only: it always reports more indicators than are defensible.
 
+![Top indicator taxa](examples/r_analysis/figures/12_indicator_species.png)
+
+*Expected output. The strongest indicator taxa (IndVal.g, FDR < 0.05), coloured by the group they characterise. In the example 1,399 of 4,081 taxa pass FDR; a high IndVal combines being concentrated in a group and present across its samples.*
+
 ## **12. Figures and Reproducibility**
 
 ### **Figures**
@@ -1206,6 +1256,10 @@ A typical 16S paper includes:
 4. Betadisper centroid plots (supplementary, especially when betadisper p < 0.05)
 5. Taxonomy barplots (phylum and/or genus level)
 6. Differential abundance results (volcano plot, forest plot, or table of significant taxa)
+
+![Publication-style composite](examples/r_analysis/figures/13_publication_figure.png)
+
+*Expected output. A composite of the key panels — alpha diversity, the Bray-Curtis ordination, and the ANCOM-BC2 effect sizes — assembled with `patchwork` as a starting point for a thesis figure.*
 
 ### **Reproducibility**
 

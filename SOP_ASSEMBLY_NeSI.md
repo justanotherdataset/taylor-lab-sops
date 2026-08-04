@@ -64,7 +64,7 @@ Four ideas, in the order the pipeline uses them:
 
 ### **Why binning uses two signals**
 
-A binner groups contigs by **sequence composition** (k-mer frequencies, which are genome-characteristic) and by **coverage** (contigs of one genome rise and fall together across samples). Neither signal alone is enough, which is why we run three binners and reconcile them (Section 8): each weights the two signals differently, and their consensus is more complete and less contaminated than any one alone.
+A binner groups contigs by **sequence composition** — the frequencies of short DNA words of a fixed length, called **k-mers** (for example, every distinct 4-letter stretch), which are characteristic of a given genome — and by **coverage** (contigs of one genome rise and fall together across samples). Neither signal alone is enough, which is why we run three binners and reconcile them (Section 8): each weights the two signals differently, and their consensus is more complete and less contaminated than any one alone.
 
 ### **Completeness, contamination and the MIMAG tiers**
 
@@ -106,7 +106,7 @@ A negative control should yield *no* MAG. If it does, you have found contaminati
 
 ### **3.1 Directories and the input contract**
 
-Assembly intermediates are large — assembly graphs and BAM files run to tens of gigabytes per sample — so everything lives on `nobackup`. Your input is the read-based SOP's `clean/` output; we link to it rather than copying.
+Assembly intermediates are large — assembly graphs and **BAM files** (the compact binary form of reads aligned to contigs) run to tens of gigabytes per sample — so everything lives on `nobackup`. Your input is the read-based SOP's `clean/` output; we link to it rather than copying.
 
 ```bash
 ACCOUNT=<your_nesi_project_code>                 # your allocation code
@@ -137,11 +137,11 @@ Every module string here was confirmed on Mahuika in August 2026, but they drift
 
 ## **4. Assemble the Reads**
 
-**Assembly** reconstructs contigs from your reads using a de Bruijn graph — it breaks reads into overlapping k-mers, threads a graph through them, and reads contigs off the graph. Two choices define this step: which **assembler**, and per-sample versus co-assembly.
+**Assembly** reconstructs contigs from your reads using a **de Bruijn graph** — it breaks reads into overlapping **k-mers** (short fixed-length DNA words), threads a graph through them (a standard way to reconstruct sequences from those overlaps), and reads contigs off the graph. Two choices define this step: which **assembler**, and per-sample versus co-assembly.
 
 ### **Assembler: MEGAHIT (default) or metaSPAdes**
 
-**We default to MEGAHIT.** It handles the uneven coverage of a metagenome well, and its memory footprint is modest enough to run per-sample on standard nodes. **metaSPAdes** often produces more contiguous assemblies on lower-diversity samples, but it can demand 200–250 GB of RAM and must queue on `hugemem` — a real cost you choose knowingly, not a free upgrade.
+**We default to MEGAHIT.** It handles the uneven coverage of a metagenome well, and its memory footprint is modest enough to run per-sample on standard nodes. **metaSPAdes** often produces more contiguous assemblies on lower-diversity samples, but it can demand 200–250 GB of RAM and must queue on `hugemem` (NeSI's large-memory partition, requested with the `#SBATCH --partition hugemem` line the script below already carries) — a real cost you choose knowingly, not a free upgrade.
 
 ### **Strategy: per-sample or co-assembly**
 
@@ -436,7 +436,7 @@ extract_fasta_bins.py "$ASM" "$C/clustering_merged.csv" --output_path "$C/fasta_
 
 ## **8. Refine the Bins**
 
-**DAS_Tool** takes the three binners' outputs and picks the best, non-redundant set: it scores every candidate bin on single-copy marker genes and keeps the highest-scoring, non-overlapping combination. The result is one curated bin set per sample, better than any single binner produced.
+**DAS_Tool** takes the three binners' outputs and picks the best, non-redundant set: it scores every candidate bin on **single-copy marker genes** (genes expected exactly once per genome, so finding two copies flags contamination) and keeps the highest-scoring, non-overlapping combination. The result is one curated bin set per sample, better than any single binner produced.
 
 DAS_Tool needs each bin set as a **contig-to-bin table** (contig name, tab, bin name). Its bundled helper `Fasta_to_Contig2Bin.sh` builds these; it lives in the module's `src/` directory, not on `PATH`, so we resolve its path from the `DAS_Tool` binary.
 
@@ -474,6 +474,7 @@ DAS_Tool \
   --search_engine diamond --write_bins --threads "${SLURM_CPUS_PER_TASK}"
 ```
 
+- **`--search_engine diamond`** uses **diamond**, a fast protein-sequence aligner, for the marker-gene search — quicker than the alternative on whole genomes.
 - **DAS_Tool ships its own single-copy-gene database**, so no reference download is needed.
 - **`--write_bins` writes the curated FASTA files** to `dastool/${SAMPLE}/${SAMPLE}_DASTool_bins/`.
 - **A sample can legitimately yield zero refined bins** if none of its candidates clears the internal score threshold — a real result for a shallow or very complex sample, not an error.
@@ -695,7 +696,7 @@ Bakta names genes; for pathway- and orthology-level function, two tools go furth
 
 ### **eggNOG-mapper — orthology and functional categories**
 
-eggNOG-mapper assigns each protein to an orthologous group and its KEGG, GO and COG annotations. It runs on Bakta's predicted proteins.
+eggNOG-mapper assigns each protein to an orthologous group and its **KEGG, GO and COG** annotations (three standard databases of gene function and pathways). It runs on Bakta's predicted proteins.
 
 `scripts/13a.eggnog.sl` (array job over `mags_derep.txt`):
 
@@ -751,7 +752,7 @@ DRAM.py annotate -i 'drep/dereplicated_genomes/*.fa' \
 DRAM.py distill -i annotation/dram/annotations.tsv -o annotation/dram/distilled
 ```
 
-- **Start with two MAGs, calibrate walltime and memory with `nn_seff`, then scale.** DRAM is the most likely step in this SOP to exceed its allocation on a first run.
+- **Start with two MAGs, calibrate walltime and memory with `nn_seff` — run `nn_seff <job_id>` after a job finishes to see the peak memory and CPU it actually used — then scale.** DRAM is the most likely step in this SOP to exceed its allocation on a first run.
 
 ---
 

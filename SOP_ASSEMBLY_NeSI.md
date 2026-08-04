@@ -606,7 +606,7 @@ python3 - <<'PY'
 import csv, glob, os
 RANKS = ["superkingdom","phylum","class","order","family","genus","species"]
 rows = []
-for f in glob.glob("gtdbtk/*.summary.tsv"):          # bac120 and/or ar53
+for f in glob.glob("gtdbtk/classify/*.summary.tsv"):          # bac120 and/or ar53
     with open(f) as fh:
         for r in csv.DictReader(fh, delimiter="\t"):
             parts = {p[0]: p[3:] for p in (r["classification"].split(";"))
@@ -817,7 +817,7 @@ PY
 | **decontam** | Prevalence method, on `part2_relab.tsv`. |
 | **Differential abundance** | Use `part2_counts.tsv`, rounded. ANCOM-BC2 and ALDEx2 need counts; treat the abundances as compositional and use compositionally aware methods. |
 | **`ps_` object names** | `ps_relab` and `ps_estcounts`, as in the read-based SOP — the suffix names what the table holds. |
-| **phylogenetic diversity (UniFrac, Faith's PD)** | **Available, unlike the read-based path.** GTDB-Tk emits a placement tree (`gtdbtk/*.classify.tree`); with it you can compute UniFrac and Faith's PD in R. Part 2 does not cover the mechanics, so treat this as your own extension. |
+| **phylogenetic diversity (UniFrac, Faith's PD)** | **Available, unlike the read-based path.** GTDB-Tk emits a placement tree (`gtdbtk/classify/*.classify.tree`); with it you can compute UniFrac and Faith's PD in R. Part 2 does not cover the mechanics, so treat this as your own extension. |
 
 ### **Where MAG analysis legitimately diverges**
 

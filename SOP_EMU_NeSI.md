@@ -4,7 +4,7 @@
 
 **v2.0** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S
 
-This document covers everything from logging into NeSI through to generating combined count tables with Emu. The statistics that follow are in `SOP_R_Analysis.md`, which numbers its own sections from 1. It assumes no prior command-line experience and starts from `pwd` — it is the only document in this set that teaches the cluster itself; the other three assume it.
+This document covers everything from logging into NeSI through to generating combined count tables with Emu. The statistics that follow are in `SOP_R_Analysis.md`, which numbers its own sections from 1. It assumes no prior command-line experience and starts from `pwd` — it is the only document in this set that teaches the cluster itself. The other cluster SOPs (`SOP_CONCOMPRA_NeSI.md`, `SOP_READBASED_NeSI.md`, `SOP_ASSEMBLY_NeSI.md`) point back here for the bash and SLURM groundwork; `SOP_R_Analysis.md` (Part 2) runs locally and stands on its own.
 
 ### **Before You Start**
 

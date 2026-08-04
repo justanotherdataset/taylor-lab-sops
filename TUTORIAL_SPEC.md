@@ -11,7 +11,7 @@ govern the page, `V` rules govern voice. Where a rule was derived by measuring
 
 ## 1. Who these are for
 
-**A graduate student who has never opened a terminal.** One reader, all four
+**A graduate student who has never opened a terminal.** One reader, all five
 documents.
 
 This overrides what a document says about itself. `SOP_READBASED_NeSI.md`
@@ -37,7 +37,7 @@ this repository are one present without the other.
 | **1** | *What is this thing?* | has never met it | ~100 words, or one sentence for a tool |
 | **2** | *Why this value, this tool?* | knows the options | a bullet or a bold run-in |
 
-Measured across the four documents by heading type:
+Measured across the four reviewed SOPs by heading type (`SOP_ASSEMBLY_NeSI.md`, the fifth document, is a v0.1 draft not yet measured against this spec — it is being brought to spec through its own review round):
 
 | Document | Layer-1 headings | Layer-2 headings | Action headings |
 | --- | --- | --- | --- |
@@ -231,7 +231,7 @@ hedging on hedges, no sentence that restates the code beneath it.
 
 ## 8. Consistency across documents
 
-Mechanical choices. One answer each, across all four files.
+Mechanical choices. One answer each, across all five files.
 
 | Item | Decision |
 | --- | --- |

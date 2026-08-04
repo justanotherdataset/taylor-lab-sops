@@ -214,9 +214,12 @@ SAMPLE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" samples.txt)
 module purge; module load SPAdes/4.0.0-foss-2023a-Python-3.11.6
 spades.py --meta -1 "clean/${SAMPLE}_R1.fastq.gz" -2 "clean/${SAMPLE}_R2.fastq.gz" \
   -o "assemblies/${SAMPLE}" -t "${SLURM_CPUS_PER_TASK}" -m 240
+
+# metaSPAdes writes contigs.fasta; give it MEGAHIT's canonical name so Sections 5–8 need no change.
+ln -sf contigs.fasta "assemblies/${SAMPLE}/${SAMPLE}.contigs.fa"
 ```
 
-- **`-m 240`, under the 250 GB request.** SPAdes terminates itself the moment it exceeds `-m`, so setting it above your allocation trades a clean stop for an out-of-memory kill deep into a 24-hour run. metaSPAdes writes contigs to `assemblies/${SAMPLE}/contigs.fasta` — a different name and path from MEGAHIT, so downstream scripts must point at the right one.
+- **`-m 240`, under the 250 GB request.** SPAdes terminates itself the moment it exceeds `-m`, so setting it above your allocation trades a clean stop for an out-of-memory kill deep into a 24-hour run. metaSPAdes writes contigs to `assemblies/${SAMPLE}/contigs.fasta` — a different name from MEGAHIT's `${SAMPLE}.contigs.fa`, so the `ln -sf` line above gives it that canonical name and Sections 5–8 run unchanged.
 
 **How long:** 8–24+ hours per sample, and the reason it is throttled to `%2`.
 
@@ -305,6 +308,20 @@ done < samples.txt
 ```
 
 > **Expect** each `*.min1500.fa` to hold somewhat fewer contigs than the raw assembly. metaQUAST's report tells you how much length you removed — if you lose most of the assembly at 1500 bp, the sample was too shallow to assemble well, and its MAGs (if any) will be poor. Note it now rather than discovering it at Section 9.
+
+**Co-assembly only.** There are no per-sample assemblies to loop over, so run metaQUAST and the min1500 filter **once** on the single co-assembly, in place of the array/loop above:
+
+```bash
+srun --account=<your_nesi_project_code> --time=01:00:00 --mem=8G --cpus-per-task=8 --pty bash
+module purge; module load QUAST/5.2.0-gimkl-2022a
+metaquast.py coassembly/all/coassembly.contigs.fa -o qc_assembly/coassembly \
+  --min-contig 1000 --max-ref-number 0 --threads 8       # can take a while on a large co-assembly
+module purge; module load SeqKit/2.4.0
+seqkit seq -m 1500 coassembly/all/coassembly.contigs.fa > coassembly/all/coassembly.min1500.fa
+exit
+```
+
+From here, `coassembly/all/coassembly.min1500.fa` is the single `$ASM` that Sections 6–8 use, and Section 6's mapping array still runs `1-${NSAMP}` — every sample is mapped to the one assembly.
 
 ---
 

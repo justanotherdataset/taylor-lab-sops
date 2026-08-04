@@ -45,13 +45,13 @@ Assembly (Section 4) and GTDB-Tk (Section 11) are by far the heaviest steps. Sec
 
 This section is concepts only — no commands. If assembly is new to you, read it once before running anything.
 
-### **Assembly versus read-based profiling**
+### **Assembly Versus Read-Based Profiling**
 
 **Read-based** profiling (`SOP_READBASED_NeSI.md`) matches each read against a reference database. It is fast and works at low depth, but it can only report organisms already in the database and recovers no genomes. **Assembly** stitches overlapping reads into longer contiguous sequences (**contigs**), then groups contigs that belong to the same organism into a genome. It finds novel organisms, but needs more depth and far more compute.
 
 Use assembly when you need the genomes themselves: novel or uncultured organisms, gene linkage (which functions co-occur in one genome), or strain-resolved biology.
 
-### **From reads to a MAG**
+### **From Reads to a MAG**
 
 Four ideas, in the order the pipeline uses them:
 
@@ -62,11 +62,11 @@ Four ideas, in the order the pipeline uses them:
 | **Bin** | A cluster of contigs grouped by composition and coverage, proposed to be one genome. |
 | **MAG** | A metagenome-assembled genome: a bin that has passed quality control (completeness and contamination). |
 
-### **Why binning uses two signals**
+### **Why Binning Uses Two Signals**
 
 A binner groups contigs by **sequence composition** — the frequencies of short DNA words of a fixed length, called **k-mers** (for example, every distinct 4-letter stretch), which are characteristic of a given genome — and by **coverage** (contigs of one genome rise and fall together across samples). Neither signal alone is enough, which is why we run three binners and reconcile them (Section 8): each weights the two signals differently, and their consensus is more complete and less contaminated than any one alone.
 
-### **Completeness, contamination and the MIMAG tiers**
+### **Completeness, Contamination and the MIMAG Tiers**
 
 A MAG is judged on two numbers. **Completeness** estimates what fraction of the genome was recovered; **contamination** estimates what fraction of the bin comes from a *different* organism. The community standard (**MIMAG**, Bowers et al. 2017) sets the tiers we use in Section 9: high-quality (≥90% complete, <5% contamination, plus rRNA and tRNA genes) and medium-quality (≥50% complete, <10% contamination). Below medium-quality, a bin is not a MAG.
 
@@ -74,11 +74,11 @@ A MAG is judged on two numbers. **Completeness** estimates what fraction of the 
 
 Assemble ten samples that share a species and you get up to ten copies of its genome — one per sample. **Dereplication** collapses these to a single representative. It groups genomes by **average nucleotide identity (ANI)**, the genome-wide sequence similarity; two genomes above **95% ANI** are the same species (Jain et al. 2018). Section 10 dereplicates at 95% to build a species-level catalogue.
 
-### **What GTDB gives you**
+### **What GTDB Gives You**
 
 A MAG is a sequence with no name until you classify it. **GTDB-Tk** places each MAG in the Genome Taxonomy Database, a genome-based, phylogenetically consistent taxonomy, and returns a name from superkingdom to species (Section 11). Novel organisms come back classified only to the rank where they stop matching — an unnamed genus is a normal, informative result, not a failure.
 
-### **The final table is compositional**
+### **The Final Table Is Compositional**
 
 The last step (Section 14) maps every sample's reads back to the dereplicated MAG set and builds a **MAG × sample abundance table**. Because it is coverage-derived relative abundance — proportions that sum to a whole — it is **compositional**, and behaves like `SOP_READBASED_NeSI.md`'s MetaPhlAn output, not like an amplicon count table. Section 15 spells out what that changes in the R analysis.
 
@@ -88,15 +88,15 @@ The last step (Section 14) maps every sample's reads back to the dereplicated MA
 
 Assembly does not change the governance, controls and depth planning in `SOP_READBASED_NeSI.md` Section 1 — **read that section before sequencing.** It changes three things, below.
 
-### **Residual host sequence survives into contigs**
+### **Residual Host Sequence Survives into Contigs**
 
 Read-level host depletion (that SOP's Section 7) is not perfect, and the reads it misses can *assemble* into contigs that then bin into a MAG. Screen your MAGs for human sequence before depositing them in a public archive. Treat a MAG carrying human contigs as controlled data, exactly as the read-based SOP treats host-depleted FASTQs.
 
-### **Assembly needs more depth than profiling**
+### **Assembly Needs More Depth than Profiling**
 
 Read-based profiling detects an organism from a handful of marker-gene reads. Assembly needs enough coverage across the *whole* genome to connect it — a genome below roughly 5–10× coverage fragments into short contigs that will not bin. A rare organism that MetaPhlAn reports may leave no MAG at all. Budget depth accordingly: **≥5 Gb of clean sequence per sample** is a common floor for gut communities, more for diverse or high-host sites.
 
-### **Controls still matter, differently**
+### **Controls Still Matter, Differently**
 
 A negative control should yield *no* MAG. If it does, you have found contamination that will also be in your real assemblies — investigate before trusting anything. A positive (mock) community is the only way to check that assembly and binning recover genomes you know are present.
 
@@ -104,7 +104,7 @@ A negative control should yield *no* MAG. If it does, you have found contaminati
 
 ## **3. Setup**
 
-### **3.1 Directories and the input contract**
+### **3.1 Directories and the Input Contract**
 
 Assembly intermediates are large — assembly graphs and **BAM files** (the compact binary form of reads aligned to contigs) run to tens of gigabytes per sample — so everything lives on `nobackup`. Your input is the read-based SOP's `clean/` output; we link to it rather than copying.
 
@@ -125,11 +125,11 @@ NSAMP=$(grep -c . samples.txt); echo "samples: $NSAMP"    # count non-empty line
 
 > **Expect** `samples: N` matching your cohort, and `ls clean/*_R1.fastq.gz | wc -l` to equal it. **Fewer** clean files than samples means the read-based pipeline did not finish for every sample — go back and complete it before assembling, or you will assemble a truncated cohort without any error.
 
-### **3.2 The job header**
+### **3.2 The Job Header**
 
 Every script below is complete and runnable as printed: shebang, every `#SBATCH` directive, `set -euo pipefail`, and the array boilerplate where relevant. Copy a block, replace `<your_nesi_project_code>`, and submit. The one value you set at submission, never in the script, is the array range — `sbatch --array=1-${NSAMP}%4`. Forget it and the job runs on sample 1 only and exits 0, with no error to warn you.
 
-### **3.3 A note on module strings**
+### **3.3 A Note on Module Strings**
 
 Every module string here was confirmed on Mahuika in August 2026, but they drift — check with `module spider <tool>`, capitalisation included, before you rely on one. The tools and their confirmed versions are collected in Appendix B.
 
@@ -143,7 +143,7 @@ Every module string here was confirmed on Mahuika in August 2026, but they drift
 
 **We default to MEGAHIT.** It handles the uneven coverage of a metagenome well, and its memory footprint is modest enough to run per-sample on standard nodes. **metaSPAdes** often produces more contiguous assemblies on lower-diversity samples, but it can demand 200–250 GB of RAM and must queue on `hugemem` (NeSI's large-memory partition, requested with the `#SBATCH --partition hugemem` line the script below already carries) — a real cost you choose knowingly, not a free upgrade.
 
-### **Strategy: per-sample or co-assembly**
+### **Strategy: Per-Sample or Co-assembly**
 
 There is no universal default, so decide by your study:
 
@@ -154,7 +154,7 @@ There is no universal default, so decide by your study:
 
 **The rule: assemble per-sample unless you have many related, low-biomass samples and specifically want the rare genomes they share** — then co-assemble. The two are not exclusive; some studies do both and compare.
 
-### **Per-sample assembly with MEGAHIT (default)**
+### **Per-Sample Assembly with MEGAHIT (default)**
 
 `scripts/04a.assemble_megahit.sl` (array job):
 
@@ -191,7 +191,7 @@ megahit -1 "clean/${SAMPLE}_R1.fastq.gz" -2 "clean/${SAMPLE}_R2.fastq.gz" \
 
 **How long:** roughly 2–12 hours per gut sample; diverse or deep samples take longer.
 
-### **Alternative: per-sample with metaSPAdes**
+### **Alternative: Per-Sample with metaSPAdes**
 
 `scripts/04b.assemble_metaspades.sl` (array job) — swap this in only if you have chosen metaSPAdes:
 
@@ -224,7 +224,7 @@ ln -sf contigs.fasta "assemblies/${SAMPLE}/${SAMPLE}.contigs.fa"
 
 **How long:** 8–24+ hours per sample, and the reason it is throttled to `%2`.
 
-### **Alternative: co-assembly with MEGAHIT**
+### **Alternative: Co-assembly with MEGAHIT**
 
 `scripts/04c.coassemble_megahit.sl` (single job, no array). MEGAHIT takes comma-separated file lists, so no concatenation is needed:
 
@@ -296,7 +296,7 @@ metaquast.py "assemblies/${SAMPLE}/${SAMPLE}.contigs.fa" \
 
 **How long:** a few minutes per assembly.
 
-### **Filter short contigs before binning**
+### **Filter Short Contigs before Binning**
 
 Binners lose accuracy on short contigs, so we drop everything under 1500 bp before Section 6. Run this once in an **interactive shell** — a live prompt on a compute node, unlike the `sbatch` scripts that queue and run on their own. The first line asks SLURM for that shell (it may pause a few seconds while a node is found — that is normal); type the lines beneath it **inside** the shell it gives you, and `exit` once the checkpoint passes to return to the login node.
 
@@ -481,7 +481,7 @@ DAS_Tool \
 
 **How long:** roughly 1–2 hours per sample.
 
-### **Collect every sample's MAGs into one place**
+### **Collect Every Sample's MAGs into One Place**
 
 Dereplication and quality control work across the whole cohort, so gather all refined bins into `mags/`, prefixing filenames with the sample so IDs stay unique and traceable:
 
@@ -526,7 +526,7 @@ checkm2 predict --input mags/ -x fa --output-directory checkm2/ \
 
 **How long:** under an hour for a few hundred MAGs.
 
-### **Apply the MIMAG tiers**
+### **Apply the MIMAG Tiers**
 
 CheckM2 writes `checkm2/quality_report.tsv`, with `Completeness` and `Contamination` columns. Filter to at least medium quality — the working set for everything downstream:
 
@@ -621,7 +621,7 @@ gtdbtk classify_wf --genome_dir drep/dereplicated_genomes -x fa \
 
 **How long:** roughly 1–4 hours for tens of MAGs; pplacer placement dominates.
 
-### **Convert GTDB ranks to the repository vocabulary**
+### **Convert GTDB Ranks to the Repository Vocabulary**
 
 GTDB writes taxonomy as `d__Bacteria;p__…;s__…`. The R analysis expects the lab's seven lowercase ranks (`superkingdom` … `species`). Convert now, so the handoff table in Section 14 carries clean ranks. Run this in an interactive shell, as in Section 5 — type `exit` when it finishes:
 
@@ -700,7 +700,7 @@ bakta --db /opt/nesi/db/bakta/v5.1/db --force \
 
 Bakta names genes; for pathway- and orthology-level function, two tools go further. **Both are optional and heavy** — run them only if your questions need functional profiles, and skip to Section 14 if a taxonomic MAG catalogue is enough.
 
-### **eggNOG-mapper — orthology and functional categories**
+### **eggNOG-mapper — Orthology and Functional Categories**
 
 eggNOG-mapper assigns each protein to an orthologous group and its **KEGG, GO and COG** annotations (three standard databases of gene function and pathways). It runs on Bakta's predicted proteins.
 
@@ -738,11 +738,13 @@ emapper.py -i "annotation/bakta/${MAG}/${MAG}.faa" --itype proteins \
 
 > **Checkpoint:** `ls annotation/eggnog/*.emapper.annotations | wc -l` should equal `$NMAG` — one annotation table per MAG. **Fewer** means some array tasks failed; check their `.err` logs for a `--data_dir` or out-of-memory error before using the results.
 
-### **DRAM — metabolic reconstruction**
+### **DRAM — Metabolic Reconstruction**
 
 **DRAM** distills annotations into a metabolism summary — carbon, nitrogen and sulfur cycling and more. Treat it as advanced and expensive: its reference set is a 539 GB shared install, and a run over many MAGs takes many hours.
 
 We confirmed the tool loads and its database is present, but a full run needs real MAGs and long walltime. Validate on one or two MAGs before scaling, and check `DRAM.py annotate` sees the shared configuration — `DRAM-setup.py print_config` can be slow to return.
+
+`scripts/13b.dram.sl` (single job):
 
 ```bash
 #!/bin/bash
@@ -827,7 +829,7 @@ coverm genome --coupled "${READS[@]}" \
 
 Follow `SOP_R_Analysis.md` for the statistics. This section covers only what differs because MAG abundances are **coverage-derived and compositional**, not amplicon counts. The differences mirror the read-based SOP's Section 13 — a MAG × sample table behaves like a MetaPhlAn table, not like an Emu count table.
 
-### **Reshape before you open the R analysis**
+### **Reshape before You Open the R Analysis**
 
 The R analysis expects taxa in rows with named rank columns before the sample columns. Join CoverM's abundances to the GTDB taxonomy from Section 11. Run this in an interactive shell, as in Section 5 — type `exit` when it finishes:
 
@@ -850,7 +852,7 @@ PY
 
 `part2_relab.tsv` holds relative abundance; use it for beta diversity and `decontam`, and never round it or pass it through SRS. `part2_counts.tsv` holds read counts; round it in R and use it **only** for differential abundance.
 
-### **What changes in the R analysis**
+### **What Changes in the R Analysis**
 
 | Step | On MAG input |
 | --- | --- |
@@ -862,7 +864,7 @@ PY
 | **`ps_` object names** | `ps_relab` and `ps_estcounts`, as in the read-based SOP — the suffix names what the table holds. |
 | **phylogenetic diversity (UniFrac, Faith's PD)** | **Available, unlike the read-based path.** GTDB-Tk emits a placement tree (`gtdbtk/classify/*.classify.tree`); with it you can compute UniFrac and Faith's PD in R. The R analysis does not cover the mechanics, so treat this as your own extension. |
 
-### **Where MAG analysis legitimately diverges**
+### **Where MAG Analysis Legitimately Diverges**
 
 A MAG table is more than a taxonomy table — its rows are **genomes you reconstructed**, not database hits. Three consequences:
 
@@ -910,7 +912,12 @@ set -euo pipefail
 cat versions.txt
 ```
 
-Record additionally, as you go: which samples yielded no MAGs and why, the GTDB release tag (from `${GTDBTK_DATA_PATH}`), the Bakta and eggNOG database versions, and whether MAGs were screened for host sequence before any deposition.
+Record these as you go — your methods section needs them:
+
+- which samples yielded no MAGs, and why
+- the GTDB release tag (from `${GTDBTK_DATA_PATH}`)
+- the Bakta and eggNOG database versions
+- whether MAGs were screened for host sequence before any deposition
 
 ---
 

@@ -4,6 +4,8 @@
 
 **v2.0** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S
 
+**Contents:** [Quick Roadmap](#quick-roadmap) · [1. Getting Started on NeSI](#1-getting-started-on-nesi) · [2. Understanding Your Data](#2-understanding-your-data) · [3. Processing Nanopore Reads](#3-processing-nanopore-reads) · [4. Taxonomy and Community Profiling with Emu](#4-taxonomy-and-community-profiling-with-emu) · [Troubleshooting](#troubleshooting) · [Appendices](#appendices)
+
 This document covers everything from logging into NeSI through to generating combined count tables with Emu. The statistics that follow are in `SOP_R_Analysis.md`, which numbers its own sections from 1. It assumes no prior command-line experience and starts from `pwd` — it is the only document in this set that teaches the cluster itself. The other cluster SOPs (`SOP_CONCOMPRA_NeSI.md`, `SOP_READBASED_NeSI.md`, `SOP_ASSEMBLY_NeSI.md`) point back here for the bash and SLURM groundwork; `SOP_R_Analysis.md` (Part 2) runs locally and stands on its own.
 
 ### **Before You Start**

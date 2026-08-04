@@ -4,6 +4,8 @@
 
 **v3.0** | last updated July 2026 | NeSI (SLURM) | Illumina paired-end | human-associated samples
 
+**Contents:** [Quick Roadmap: What You'll Do](#quick-roadmap-what-youll-do) · [1. Before You Generate Data](#1-before-you-generate-data) · [2. Preflight and Storage](#2-preflight-and-storage) · [3. Setup](#3-setup) · [4. The Standard Job Header](#4-the-standard-job-header) · [5. Quality Control](#5-quality-control) · [6. Trimming and PhiX Removal](#6-trimming-and-phix-removal) · [7. Host Depletion](#7-host-depletion) · [8. Read Accounting and Depth Gates](#8-read-accounting-and-depth-gates) · [9. Taxonomy with MetaPhlAn 4](#9-taxonomy-with-metaphlan-4) · [10. Function with HUMAnN](#10-function-with-humann) · [11. Merging, Normalising and Splitting Tables](#11-merging-normalising-and-splitting-tables) · [12. Contamination Screening](#12-contamination-screening) · [13. Statistics: What Changes from SOP_R_Analysis.md](#13-statistics-what-changes-from-sop_r_analysismd) · [14. Provenance](#14-provenance) · [Appendix A: Submission Chain](#appendix-a-submission-chain) · [Appendix B: Triage](#appendix-b-triage) · [Appendix C: Resources](#appendix-c-resources)
+
 This document takes Illumina shotgun reads to taxonomic and functional profiles without assembling anything. Reads are matched directly against reference databases: MetaPhlAn 4 for taxonomy, HUMAnN for gene families and pathways. The statistics then run on `SOP_R_Analysis.md`, with Section 13 below listing what changes because the input is relative abundance rather than counts.
 
 Illumina sequences each fragment from both ends, so every sample arrives as two files — `_R1` and `_R2` — whose paired reads are called *mates*; the workflow keeps or discards the two together throughout.

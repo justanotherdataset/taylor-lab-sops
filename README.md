@@ -2,7 +2,7 @@
 
 **Taylor Lab SOP suite — v1.1 (August 2026).** Per-document versions are in each file's header; this line is the release the set was cut as one.
 
-*Suite changelog — v1.1 (August 2026): whole-suite capstone review; `SOP_ASSEMBLY_NeSI.md` added as a draft (not yet reviewed); cross-document coherence and reference fixes across the set. v1.0 (July 2026): the four Nanopore/Illumina/R SOPs, correctness- and tutorial-reviewed.*
+*Suite changelog — v1.1 (August 2026): whole-suite capstone review; `SOP_ASSEMBLY_NeSI.md` (v1.0) added and brought to standard through its own correctness + tutorial review; cross-document coherence and reference fixes across the set. v1.0 (July 2026): the four Nanopore/Illumina/R SOPs, correctness- and tutorial-reviewed.*
 
 Standard operating procedures for microbial community analysis on [NeSI](https://www.nesi.org.nz/) (New Zealand eScience Infrastructure) and in R, written for someone running their first analysis. Each SOP is a complete walkthrough — what a step does, the exact commands, and what correct output looks like.
 
@@ -15,7 +15,7 @@ Standard operating procedures for microbial community analysis on [NeSI](https:/
 | Short-read 16S amplicons, Illumina (V3–V4, 341F–785R) | Not yet covered — you need a DADA2 or similar ASV workflow | `SOP_R_Analysis.md` applies once you have a count table |
 | Shotgun metagenomes, read-based profiling, human-associated samples | `SOP_READBASED_NeSI.md` | `SOP_R_Analysis.md`, with the read-based deltas in `SOP_READBASED_NeSI.md` Section 13 |
 | Shotgun metagenomes, read-based profiling, animal or environmental samples | Not covered — MetaPhlAn's marker genes are built for human-associated taxa | — |
-| Shotgun metagenomes, assembly and binning into MAGs | `SOP_READBASED_NeSI.md` Sections 1–8 for clean reads, then `SOP_ASSEMBLY_NeSI.md` **(draft, v0.1 — not yet reviewed)** | `SOP_R_Analysis.md`, with the deltas in `SOP_ASSEMBLY_NeSI.md` Section 15 |
+| Shotgun metagenomes, assembly and binning into MAGs | `SOP_READBASED_NeSI.md` Sections 1–8 for clean reads, then `SOP_ASSEMBLY_NeSI.md` | `SOP_R_Analysis.md`, with the deltas in `SOP_ASSEMBLY_NeSI.md` Section 15 |
 
 **Amplicon** means you PCR-amplified one gene (16S) and sequenced only that; **shotgun** means you sequenced all DNA without targeting a gene. **Read-based** profiles reads directly against reference databases with no assembly step — faster and works on lower-coverage data, but it finds only organisms and genes already in the databases and recovers no novel genomes (for those, you want assembly and binning).
 
@@ -121,4 +121,4 @@ You are welcome to adapt these for your own lab. **Note that no licence has been
 
 ---
 
-*Last updated: July 2026 — second review round. The four Nanopore, Illumina and R SOPs (`SOP_EMU_NeSI.md`, `SOP_CONCOMPRA_NeSI.md`, `SOP_READBASED_NeSI.md`, `SOP_R_Analysis.md`) and this README were probed against NeSI Mahuika and its R installation ([`reviews/00_ENVIRONMENT.md`](reviews/00_ENVIRONMENT.md)), reviewed adversarially, and rewritten against the findings; the first round is archived in [`reviews/v1/`](reviews/v1/). `SOP_ASSEMBLY_NeSI.md` (v0.1, August 2026) was added afterwards and is still a draft — it has not yet been through the correctness or tutorial review rounds. The sixteen questions the first round could not answer without cluster access are now settled in this round's reports. A whole-suite capstone review followed in August 2026 ([`reviews/capstone/`](reviews/capstone/)). The review harness is [`prompts/SOP_REVIEW_PROMPT.md`](prompts/SOP_REVIEW_PROMPT.md).*
+*Last updated: July 2026 — second review round. The four Nanopore, Illumina and R SOPs (`SOP_EMU_NeSI.md`, `SOP_CONCOMPRA_NeSI.md`, `SOP_READBASED_NeSI.md`, `SOP_R_Analysis.md`) and this README were probed against NeSI Mahuika and its R installation ([`reviews/00_ENVIRONMENT.md`](reviews/00_ENVIRONMENT.md)), reviewed adversarially, and rewritten against the findings; the first round is archived in [`reviews/v1/`](reviews/v1/). `SOP_ASSEMBLY_NeSI.md` (v1.0, August 2026) was added afterwards and brought to the same standard through its own dedicated correctness and tutorial review in August 2026. The sixteen questions the first round could not answer without cluster access are now settled in this round's reports. A whole-suite capstone review followed in August 2026 ([`reviews/capstone/`](reviews/capstone/)). The review harness is [`prompts/SOP_REVIEW_PROMPT.md`](prompts/SOP_REVIEW_PROMPT.md).*

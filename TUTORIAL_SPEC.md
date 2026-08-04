@@ -37,7 +37,7 @@ this repository are one present without the other.
 | **1** | *What is this thing?* | has never met it | ~100 words, or one sentence for a tool |
 | **2** | *Why this value, this tool?* | knows the options | a bullet or a bold run-in |
 
-Measured across the four reviewed SOPs by heading type (`SOP_ASSEMBLY_NeSI.md`, the fifth document, is a v0.1 draft not yet measured against this spec — it is being brought to spec through its own review round):
+Measured across the four original SOPs by heading type (`SOP_ASSEMBLY_NeSI.md`, added later, was brought to spec through its own dedicated correctness and tutorial review in August 2026):
 
 | Document | Layer-1 headings | Layer-2 headings | Action headings |
 | --- | --- | --- | --- |

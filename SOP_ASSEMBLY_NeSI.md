@@ -618,6 +618,7 @@ gtdbtk classify_wf --genome_dir drep/dereplicated_genomes -x fa \
 - **`--pplacer_cpus 1` bounds the memory.** pplacer loads the reference tree once per thread, so more pplacer CPUs multiply the memory; one thread keeps it under the 128 GB request. It is the slow part, but the safe one.
 - **Do not add `--full_tree`.** The unsplit bacterial tree needs more than 320 GB of RAM to load; the default split tree gives the same classification within the memory here.
 - **This version uses skani for the ANI step, built into the R232 database** — no `--mash_db` flag and no separate download.
+- **An all-bacterial cohort is normal.** GTDB-Tk then writes only `gtdbtk.bac120.summary.tsv` and no `ar53` file (and the reverse for an all-archaeal set). The rank parser below globs `gtdbtk/classify/*.summary.tsv`, so it handles either — a missing `ar53.summary.tsv` is expected, not an error.
 
 **How long:** roughly 1–4 hours for tens of MAGs; pplacer placement dominates.
 
@@ -937,6 +938,7 @@ Record these as you go — your methods section needs them:
 | CoverM finds no genomes | Missing `-x fa` (it defaults to `fna`). |
 | CoverM: `Cannot continue without minimap2`, or `samtools: symbol lookup error … krb5` | Section 14 needs `minimap2/2.30-GCC-12.3.0` and `SAMtools/1.19-GCC-12.3.0` loaded alongside CoverM — it bundles no mapper, and the newer SAMtools 1.23.1 from Section 6 is broken here by CoverM's `LegacySystemLibs/7`. |
 | Any array runs only sample 1 | The `--array` range was left at the header placeholder — set it at submission. |
+| A single or array job (dRep, GTDB-Tk, DRAM) fails partway and will not re-run | These write into a fixed output directory and will not cleanly overwrite it; remove it (`rm -rf drep`, `rm -rf gtdbtk`, `rm -rf annotation/dram`) before resubmitting — Section 12's bakta takes `--force` for the same reason. |
 
 ---
 

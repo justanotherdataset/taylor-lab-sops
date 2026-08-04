@@ -675,7 +675,7 @@ MAG=$(sed -n "${SLURM_ARRAY_TASK_ID}p" mags_derep.txt)
 [[ -n "$MAG" ]] || { echo "empty MAG at ${SLURM_ARRAY_TASK_ID}"; exit 1; }
 
 module purge; module load bakta/1.10.1-foss-2023a
-bakta --db /opt/nesi/db/bakta/v5.1/db \
+bakta --db /opt/nesi/db/bakta/v5.1/db --force \
   --output "annotation/bakta/${MAG}" --prefix "${MAG}" \
   --threads "${SLURM_CPUS_PER_TASK}" \
   "drep/dereplicated_genomes/${MAG}.fa"
@@ -684,7 +684,7 @@ bakta --db /opt/nesi/db/bakta/v5.1/db \
 - **The database is the shared 72 GB Bakta v5.1 build** at `/opt/nesi/db/bakta/v5.1/db` — no download.
 - **Each MAG gets its own output directory** with `.gff3`, `.tsv`, `.faa` (proteins) and more. The `.faa` feeds the optional functional step below.
 
-> **Checkpoint:** `ls annotation/bakta/*/*.tsv | wc -l` should equal `$NMAG`. A MAG with **zero coding sequences** is not a real genome — cross-check it against its CheckM2 completeness.
+> **Checkpoint:** `ls annotation/bakta/*/*.gff3 | wc -l` should equal `$NMAG` — bakta writes one GFF3 per MAG (it also writes three `.tsv` files each, so counting `.tsv` would give roughly 3×NMAG). A MAG with **zero coding sequences** is not a real genome — cross-check it against its CheckM2 completeness.
 
 ---
 

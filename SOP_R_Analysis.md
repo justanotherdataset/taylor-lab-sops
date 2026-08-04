@@ -101,7 +101,7 @@ install.packages("devtools")
 devtools::install_github("microsud/microbiomeutilities")
 
 # pairwiseAdonis for post-hoc PERMANOVA comparisons
-# devtools::install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
+devtools::install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
 
 # OPTIONAL — mixed models, only for non-independent designs (repeated measures,
 # co-housed, nested). Skip this line if your samples are independent.
@@ -160,7 +160,7 @@ scp <username>@login.mahuika.nesi.org.nz:/nesi/project/<your_nesi_project_code>/
 ```r
 setwd("~/path/to/your/files")
 
-# Read in the combined counts table (from combine_emu_results.py)
+# Read in the combined counts table (from 04_combine_emu_results.py)
 # Format: tax_id | species | genus | ... | superkingdom | sample1 | sample2 | ...
 emu_combined <- read.table("emu-combined-counts_silva.tsv",
                            header = TRUE, row.names = 1,

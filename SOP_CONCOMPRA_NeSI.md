@@ -720,7 +720,7 @@ The script is committed to this repository as [`reformat_silva_for_sintax.py`](r
 #    species_taxid.fasta (its SILVA database download). If you do not have it,
 #    build it via SOP_EMU_NeSI.md's database step first.
 cp reformat_silva_for_sintax.py /nesi/project/<your_nesi_project_code>/databases/silva_emu_sintax/
-cd /nesi/project/<your_nesi_project_code>/databases/emu/silva/   # the Emu SILVA bundle
+cd /nesi/nobackup/<your_nesi_project_code>/<your_project>/emu_databases/silva   # where SOP_EMU_NeSI.md Section 4 installed the Emu SILVA bundle (holds species_taxid.fasta)
 python /nesi/project/<your_nesi_project_code>/databases/silva_emu_sintax/reformat_silva_for_sintax.py \
     species_taxid.fasta silva_sintax.fa
 
@@ -737,7 +737,7 @@ mv silva_sintax.fa silva_sintax.udb \
    /nesi/project/<your_nesi_project_code>/databases/silva_emu_sintax/
 ```
 
-Confirm the file is present before reformatting: `ls species_taxid.fasta` should list it; "No such file" means you are in the wrong directory or the Emu SILVA database was never downloaded.
+Confirm the file is present before reformatting: `ls species_taxid.fasta` should list it; "No such file" means you are not in the directory where `SOP_EMU_NeSI.md` Section 4 installed the bundle (`emu_databases/silva` on `nobackup`), or the Emu SILVA database was never downloaded.
 
 Record in the directory's `README.md`: source SILVA release and Emu bundle version, build date, reformatter commit, and record counts in and out (they should match).
 

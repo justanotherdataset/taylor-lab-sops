@@ -27,22 +27,22 @@ This document does not cover basecalling, demultiplexing or read filtering.
 ## **Quick Roadmap: What You'll Do**
 
 ```
-STAGE 1: Install (once per project)
+SECTION 2: Install (once per project)
    CONCOMPRA repo + conda env + SILVA SINTAX database
                     ↓
-STAGE 2: Pre-flight
+SECTION 3: Pre-flight
    Screen for duplicate reads → deduplicate if present
                     ↓
-STAGE 3: Configure the run
+SECTION 4: Configure the run
    Symlink fastqs → directory_list.txt → primer_set.fa
                     ↓
-STAGE 4: Run and verify
+SECTIONS 5-6: Run and verify
    Submit main.sh (SLURM) → check per-sample consensus on disk
                     ↓
-STAGE 5: Post-process
+SECTION 7: Post-process
    sintax taxonomy → MAFFT alignment → FastTree phylogeny
                     ↓
-STAGE 6: Hand off to R
+SECTION 8: Hand off to R
    Build concompra_for_R/ → phyloseq analysis (SOP_R_Analysis.md)
 ```
 
@@ -319,7 +319,7 @@ sed -i 's|^\([[:space:]]*\)rm -rf temporary|\1# rm -rf temporary   # kept for Se
 grep -n 'rm -rf temporary' main.sh    # must show the line commented out
 ```
 
-Then have `05_concompra.sh` run your copy — `bash ./main.sh` — rather than the one in the repository. Section 6's primary check works either way; this only buys you the finer diagnosis when something does fail. Delete `temporary/` yourself once the analysis is final (Section 9).
+Then have `05_concompra.sh` run your copy — `bash ./main.sh` — rather than the one in the repository. Section 6's primary check works either way; this only buys you the finer diagnosis when something does fail. Delete `temporary/` yourself once the analysis is final (Section 10).
 
 **Script.** Save as `05_concompra.sh` in the parent of `concompra/`. The job runs inside the `concompra/` run directory (`#SBATCH --chdir`), so its log paths are relative to that directory — create `concompra/logs/` first:
 

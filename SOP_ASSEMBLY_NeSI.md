@@ -479,6 +479,8 @@ DAS_Tool \
 - **`--write_bins` writes the curated FASTA files** to `dastool/${SAMPLE}/${SAMPLE}_DASTool_bins/`.
 - **A sample can legitimately yield zero refined bins** if none of its candidates clears the internal score threshold — a real result for a shallow or very complex sample, not an error.
 
+**How long:** roughly 1–2 hours per sample.
+
 ### **Collect every sample's MAGs into one place**
 
 Dereplication and quality control work across the whole cohort, so gather all refined bins into `mags/`, prefixing filenames with the sample so IDs stay unique and traceable:
@@ -579,6 +581,8 @@ dRep dereplicate drep/ -g mags/*.fa --genomeInfo drep/genomeInfo.csv \
 - **`-sa 0.95` sets the species boundary.** 95% ANI is the operational species threshold (Jain et al. 2018); the representatives in `drep/dereplicated_genomes/` are a species-level catalogue. For strain-level tracking, raise it to `-sa 0.99` and expect more, finer clusters.
 - **`-comp 50 -con 10`** keep dRep's quality filter aligned with the MIMAG medium-quality gate from Section 9, so nothing sub-threshold sneaks back in.
 - **Providing `--genomeInfo` is what stops dRep running CheckM itself** — without it, dRep would try to run its own (older) CheckM and could disagree with your Section 9 numbers.
+
+**How long:** ~6 hours for the whole cohort at once.
 
 > **Checkpoint:** `ls drep/dereplicated_genomes/*.fa | wc -l` is your species count — always ≤ the input MAG count, and usually well below it in a cohort with shared taxa. **A number equal to the input** means nothing dereplicated: check that `genomeInfo.csv` matched the filenames (the `.fa` suffix is the usual culprit).
 
@@ -686,6 +690,8 @@ bakta --db /opt/nesi/db/bakta/v5.1/db --force \
 - **The database is the shared 72 GB Bakta v5.1 build** at `/opt/nesi/db/bakta/v5.1/db` — no download.
 - **Each MAG gets its own output directory** with `.gff3`, `.tsv`, `.faa` (proteins) and more. The `.faa` feeds the optional functional step below.
 
+**How long:** roughly 1–2 hours per MAG.
+
 > **Checkpoint:** `ls annotation/bakta/*/*.gff3 | wc -l` should equal `$NMAG` — bakta writes one GFF3 per MAG (it also writes three `.tsv` files each, so counting `.tsv` would give roughly 3×NMAG). A MAG with **zero coding sequences** is not a real genome — cross-check it against its CheckM2 completeness.
 
 ---
@@ -728,6 +734,10 @@ emapper.py -i "annotation/bakta/${MAG}/${MAG}.faa" --itype proteins \
 - **`--data_dir /opt/nesi/db/eggnog_db/data` is mandatory.** Loading the module alone leaves eggNOG-mapper pointing at an empty bundled directory, and it exits with `not a valid file`. The 94 GB shared install has the real `eggnog.db` and diamond database.
 - **`-m diamond`** uses the pre-built diamond database rather than HMMER — far faster for whole genomes.
 
+**How long:** ~4 hours per MAG.
+
+> **Checkpoint:** `ls annotation/eggnog/*.emapper.annotations | wc -l` should equal `$NMAG` — one annotation table per MAG. **Fewer** means some array tasks failed; check their `.err` logs for a `--data_dir` or out-of-memory error before using the results.
+
 ### **DRAM — metabolic reconstruction**
 
 **DRAM** distills annotations into a metabolism summary — carbon, nitrogen and sulfur cycling and more. Treat it as advanced and expensive: its reference set is a 539 GB shared install, and a run over many MAGs takes many hours.
@@ -753,6 +763,10 @@ DRAM.py distill -i annotation/dram/annotations.tsv -o annotation/dram/distilled
 ```
 
 - **Start with two MAGs, calibrate walltime and memory with `nn_seff` — run `nn_seff <job_id>` after a job finishes to see the peak memory and CPU it actually used — then scale.** DRAM is the most likely step in this SOP to exceed its allocation on a first run.
+
+**How long:** up to 24 hours; the reason to validate on 1–2 MAGs first.
+
+> **Checkpoint:** `ls annotation/dram/distilled/` should list the distilled metabolism summary files. An **empty** `distilled/` means `annotate` produced no `annotations.tsv` — re-check the shared config resolved with `DRAM-setup.py print_config`.
 
 ---
 
@@ -802,6 +816,8 @@ coverm genome --coupled "${READS[@]}" \
 - **`-x fa`** matches dRep's output extension; CoverM defaults to `fna` and would otherwise find no genomes.
 - **`--min-covered-fraction 0.10`** reports a MAG as present in a sample only if at least 10% of its length is covered, which suppresses spurious low-level cross-mapping. Report the value you use.
 - **Two tables on purpose:** relative abundance for compositional analyses, counts for differential abundance — the same split the read-based SOP makes (its Section 13).
+
+**How long:** ~4–8 hours for the whole cohort.
 
 > **Checkpoint:** both tables should have one row per MAG and one column per sample (the relative-abundance table also carries an `unmapped` row; the count table does not). **A column of all zeros** for a real sample usually means its reads never reached `clean/` — reconcile against `samples.txt`.
 

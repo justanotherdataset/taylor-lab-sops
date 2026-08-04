@@ -13,7 +13,7 @@ Unlike read-based profiling (`SOP_READBASED_NeSI.md`), this workflow can recover
 ### **Before you start**
 
 - **You need clean, host-depleted reads.** This SOP starts where `SOP_READBASED_NeSI.md` reaches its depth gates (that SOP's Section 8): trimmed, PhiX-removed, host-depleted paired FASTQ files in a `clean/` directory, with a `samples.txt` manifest. Run that SOP's Sections 1–8 first. We do not repeat QC, trimming or host depletion here.
-- **You need to have run one NeSI pipeline before.** Bash, `module`, `sbatch` and array jobs are taken as familiar. If they are not, work through `SOP_EMU_NeSI.md` Section 1 first — it is the only document that teaches the cluster.
+- **This SOP does not re-teach the cluster.** Bash, `module`, `sbatch` and array jobs are used throughout; if they are new to you, work through `SOP_EMU_NeSI.md` **Sections 1–2** first — it is the only document that teaches the cluster, starting from `pwd`, and Section 2 covers FASTQ files and quality scores. You do not need to have finished another pipeline, only that grounding. Two things this SOP uses that `SOP_EMU_NeSI.md` does not — an interactive `srun` shell (Section 5) and the `hugemem` partition (Section 4) — are explained where they first appear below.
 - **This does not cover** long-read or hybrid assembly (Illumina only), viruses or plasmids (assembly recovers them but binning and CheckM2 are built for prokaryotes — a separate viral workflow is needed), or eukaryotic genomes.
 
 ---
@@ -298,7 +298,7 @@ metaquast.py "assemblies/${SAMPLE}/${SAMPLE}.contigs.fa" \
 
 ### **Filter short contigs before binning**
 
-Binners lose accuracy on short contigs, so we drop everything under 1500 bp before Section 6. Run this once, interactively:
+Binners lose accuracy on short contigs, so we drop everything under 1500 bp before Section 6. Run this once in an **interactive shell** — a live prompt on a compute node, unlike the `sbatch` scripts that queue and run on their own. The first line asks SLURM for that shell (it may pause a few seconds while a node is found — that is normal); type the lines beneath it **inside** the shell it gives you, and `exit` once the checkpoint passes to return to the login node.
 
 ```bash
 srun --account=<your_nesi_project_code> --time=00:20:00 --mem=4G --pty bash
@@ -618,7 +618,7 @@ gtdbtk classify_wf --genome_dir drep/dereplicated_genomes -x fa \
 
 ### **Convert GTDB ranks to the repository vocabulary**
 
-GTDB writes taxonomy as `d__Bacteria;p__…;s__…`. The R analysis expects the lab's seven lowercase ranks (`superkingdom` … `species`). Convert now, so the handoff table in Section 14 carries clean ranks:
+GTDB writes taxonomy as `d__Bacteria;p__…;s__…`. The R analysis expects the lab's seven lowercase ranks (`superkingdom` … `species`). Convert now, so the handoff table in Section 14 carries clean ranks. Run this in an interactive shell, as in Section 5 — type `exit` when it finishes:
 
 ```bash
 srun --account=<your_nesi_project_code> --time=00:15:00 --mem=4G --pty bash
@@ -812,7 +812,7 @@ Follow `SOP_R_Analysis.md` for the statistics. This section covers only what dif
 
 ### **Reshape before you open the R analysis**
 
-The R analysis expects taxa in rows with named rank columns before the sample columns. Join CoverM's abundances to the GTDB taxonomy from Section 11:
+The R analysis expects taxa in rows with named rank columns before the sample columns. Join CoverM's abundances to the GTDB taxonomy from Section 11. Run this in an interactive shell, as in Section 5 — type `exit` when it finishes:
 
 ```bash
 srun --account=<your_nesi_project_code> --time=00:15:00 --mem=4G --pty bash

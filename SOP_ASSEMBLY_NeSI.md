@@ -4,6 +4,8 @@
 
 **v0.1** | last updated August 2026 | NeSI (SLURM) | Illumina paired-end
 
+> **Draft (v0.1) — not yet through the lab's correctness and tutorial review rounds.** The other SOPs in this suite have each been through two dedicated reviews; this one has not. Treat every command as unverified end-to-end: run one sample first and check each checkpoint before you rely on results or scale to a cohort.
+
 This document takes clean Illumina shotgun reads and reconstructs the genomes of the organisms in your sample — assembling reads into contigs, grouping contigs into bins, and curating those bins into metagenome-assembled genomes (**MAGs**). It ends with a dereplicated MAG set carrying GTDB taxonomy, quality metrics, functional annotations, and a MAG × sample abundance table, which then feeds `SOP_R_Analysis.md`.
 
 Unlike read-based profiling (`SOP_READBASED_NeSI.md`), this workflow can recover organisms and genes that are in **no reference database** — the point of assembly. It costs far more compute, and needs deeper sequencing, in exchange.

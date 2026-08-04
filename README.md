@@ -11,7 +11,7 @@ Standard operating procedures for microbial community analysis on [NeSI](https:/
 | Short-read 16S amplicons, Illumina (V3–V4, 341F–785R) | Not yet covered — you need a DADA2 or similar ASV workflow | `SOP_R_Analysis.md` applies once you have a count table |
 | Shotgun metagenomes, read-based profiling, human-associated samples | `SOP_READBASED_NeSI.md` | `SOP_R_Analysis.md`, with the deltas in that SOP's Section 13 |
 | Shotgun metagenomes, read-based profiling, animal or environmental samples | Not covered — MetaPhlAn's marker genes are built for human-associated taxa | — |
-| Shotgun metagenomes, assembly and binning into MAGs | `SOP_READBASED_NeSI.md` Sections 1–8 for clean reads, then `SOP_ASSEMBLY_NeSI.md` | `SOP_R_Analysis.md`, with the deltas in `SOP_ASSEMBLY_NeSI.md` Section 15 |
+| Shotgun metagenomes, assembly and binning into MAGs | `SOP_READBASED_NeSI.md` Sections 1–8 for clean reads, then `SOP_ASSEMBLY_NeSI.md` **(draft, v0.1 — not yet reviewed)** | `SOP_R_Analysis.md`, with the deltas in `SOP_ASSEMBLY_NeSI.md` Section 15 |
 
 **Amplicon** means you PCR-amplified one gene (16S) and sequenced only that; **shotgun** means you sequenced all DNA without targeting a gene. **Read-based** profiles reads directly against reference databases with no assembly step — faster and works on lower-coverage data, but it finds only organisms and genes already in the databases and recovers no novel genomes (for those, you want assembly and binning).
 

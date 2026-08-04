@@ -394,7 +394,7 @@ Number, percentage and megabases of reads above quality cutoffs
 >Q30:	3061234 (14.6%) 2775.6Mb
 ```
 
-Two plots to check first when assessing run quality:
+Two plots to check first when assessing run quality (the figures below are illustrative output from a public mock-community run — see [`examples/emu/README.md`](examples/emu/README.md); your own plots will differ):
 
 **Read length histogram (raw):**
 

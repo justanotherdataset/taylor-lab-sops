@@ -755,7 +755,10 @@ The catalogue tells you *which* genomes exist; this step tells you *how much* of
 #SBATCH --error  logs/%x_%j.err
 
 set -euo pipefail
-module purge; module load CoverM/0.7.0-GCC-12.3.0
+# CoverM's genome mode shells out to minimap2 (its mapper) and samtools; the CoverM
+# module bundles neither. Note SAMtools 1.23.1 (used in Section 6) is broken here by
+# CoverM's LegacySystemLibs/7 dependency (a krb5 symbol clash) — pin 1.19 for this step.
+module purge; module load CoverM/0.7.0-GCC-12.3.0 minimap2/2.30-GCC-12.3.0 SAMtools/1.19-GCC-12.3.0
 
 # Build the coupled read list across ALL samples, in manifest order.
 READS=()
@@ -767,10 +770,13 @@ coverm genome --coupled "${READS[@]}" \
   --methods relative_abundance --min-covered-fraction 0.10 \
   --threads "${SLURM_CPUS_PER_TASK}" -o coverm/mag_relabund.tsv
 
-# Read counts for differential abundance (integer-like; the DA tools need counts).
+# Read counts for differential abundance (the DA tools need counts). CoverM rejects
+# `count` when --min-covered-fraction > 0 (count computes no covered fraction, so it
+# errors out and writes nothing); presence is already gated by the relative_abundance
+# table above, so set the fraction to 0 here.
 coverm genome --coupled "${READS[@]}" \
   --genome-fasta-directory drep/dereplicated_genomes -x fa \
-  --methods count --min-covered-fraction 0.10 \
+  --methods count --min-covered-fraction 0 \
   --threads "${SLURM_CPUS_PER_TASK}" -o coverm/mag_counts.tsv
 ```
 
@@ -778,7 +784,7 @@ coverm genome --coupled "${READS[@]}" \
 - **`--min-covered-fraction 0.10`** reports a MAG as present in a sample only if at least 10% of its length is covered, which suppresses spurious low-level cross-mapping. Report the value you use.
 - **Two tables on purpose:** relative abundance for compositional analyses, counts for differential abundance — the same split the read-based SOP makes (its Section 13).
 
-> **Checkpoint:** both tables should have one row per MAG (plus an `unmapped`/`Genome` row) and one column per sample. **A column of all zeros** for a real sample usually means its reads never reached `clean/` — reconcile against `samples.txt`.
+> **Checkpoint:** both tables should have one row per MAG and one column per sample (the relative-abundance table also carries an `unmapped` row; the count table does not). **A column of all zeros** for a real sample usually means its reads never reached `clean/` — reconcile against `samples.txt`.
 
 ---
 
@@ -887,6 +893,7 @@ Record additionally, as you go: which samples yielded no MAGs and why, the GTDB 
 | GTDB-Tk killed on memory | `--full_tree` was set (needs >320 GB); remove it, and keep `--pplacer_cpus 1`. |
 | eggNOG-mapper: `not a valid file` | Missing `--data_dir /opt/nesi/db/eggnog_db/data`. |
 | CoverM finds no genomes | Missing `-x fa` (it defaults to `fna`). |
+| CoverM: `Cannot continue without minimap2`, or `samtools: symbol lookup error … krb5` | Section 14 needs `minimap2/2.30-GCC-12.3.0` and `SAMtools/1.19-GCC-12.3.0` loaded alongside CoverM — it bundles no mapper, and the newer SAMtools 1.23.1 from Section 6 is broken here by CoverM's `LegacySystemLibs/7`. |
 | Any array runs only sample 1 | The `--array` range was left at the header placeholder — set it at submission. |
 
 ---
@@ -938,7 +945,7 @@ Confirmed on Mahuika, August 2026. Every module string will drift — check with
 | Annotation | Bakta | `bakta/1.10.1-foss-2023a` | `/opt/nesi/db/bakta/v5.1/db` (72 GB) |
 | Function (opt) | eggNOG-mapper | `eggnog-mapper/2.1.12-gimkl-2022a` | `/opt/nesi/db/eggnog_db/data` (94 GB) — pass `--data_dir` |
 | Metabolism (opt) | DRAM | `DRAM/1.3.5-Miniconda3` | `/opt/nesi/db/DRAM_1.3.5` (539 GB) |
-| Abundance | CoverM | `CoverM/0.7.0-GCC-12.3.0` | — |
+| Abundance | CoverM (+ minimap2, SAMtools 1.19) | `CoverM/0.7.0-GCC-12.3.0`, `minimap2/2.30-GCC-12.3.0`, `SAMtools/1.19-GCC-12.3.0` | CoverM bundles no mapper; pin SAMtools 1.19, not the 1.23.1 used in Section 6 |
 
 Starting-point resources — size on two or three samples and calibrate with `nn_seff` before a full cohort:
 

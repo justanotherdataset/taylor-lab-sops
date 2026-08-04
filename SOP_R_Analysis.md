@@ -6,7 +6,7 @@
 
 This document starts from the combined count tables produced upstream. For the Nanopore amplicon pipeline see `SOP_EMU_NeSI.md`, or `SOP_CONCOMPRA_NeSI.md` for consensus OTUs; for Illumina shotgun see `SOP_READBASED_NeSI.md`, whose Section 13 lists what changes here when the input is relative abundance.
 
-The examples use Cam's tuatara PhD data, so the variable names (Site, Sex, Species) and site names (Takapourewa, Zealandia, YoungNicksHead) are specific to that study. Adapt all variable names to your own metadata.
+The **code** examples use variable and site names from Cam's tuatara PhD study (Site, Sex, Species; Takapourewa, Zealandia, YoungNicksHead) — adapt these to your own metadata. The **figures** are real output from a different public dataset (see Worked example below), so their captions name that dataset's groups (Human, Freshwater, Saline), and any illustrative numbers in the prose — such as the Reporting template in Section 8 — are placeholders that will not match the figure captions.
 
 ### **Before You Start**
 
@@ -914,7 +914,7 @@ adonis2(dist_ait ~ Site * Sex,
 - `Site * Sex` expands to Site (main), Sex (after Site), and Site:Sex (interaction).
 - Formula order matters with sequential testing; put your primary variable first.
 
-**Reporting.** *"Microbial community composition differed significantly between sites based on both Bray-Curtis dissimilarity (PERMANOVA: R² = 0.38, p = 0.02) and Aitchison distance (R² = 0.35, p = 0.03), with site explaining 35-38% of the variation. Multivariate dispersions did not differ between sites for either metric (betadisper: Bray-Curtis p = 0.42, Aitchison p = 0.55)."*
+**Reporting.** *Report in this form (numbers illustrative — they will not match the figure captions):* *"Microbial community composition differed significantly between sites based on both Bray-Curtis dissimilarity (PERMANOVA: R² = 0.38, p = 0.02) and Aitchison distance (R² = 0.35, p = 0.03), with site explaining 35-38% of the variation. Multivariate dispersions did not differ between sites for either metric (betadisper: Bray-Curtis p = 0.42, Aitchison p = 0.55)."*
 
 ### **Step 5: Pairwise PERMANOVA (for >2 Groups)**
 
@@ -1257,7 +1257,7 @@ A **co-occurrence network** shows which taxa rise and fall together across sampl
 
 We use **SPIEC-EASI** (Kurtz et al. 2015) instead. It CLR-transforms the counts first — the same compositional fix as Aitchison distance — then infers a *conditional* dependency graph: an edge means two taxa are associated after accounting for every other taxon, rather than by a head-to-head correlation. It picks the network's sparsity by StARS stability selection instead of an arbitrary threshold, so the result is reproducible.
 
-This step is optional and needs three extra packages from Section 2, one GitHub-only (`SpiecEasi`). Work at genus level and keep the most prevalent genera: stable inference needs more samples than taxa, so a smaller, readable set is both faster and sounder.
+This step is optional and needs four extra packages from Section 2 — `igraph`, `ggraph`, `tidygraph`, and the GitHub-only `SpiecEasi`. Work at genus level and keep the most prevalent genera: stable inference needs more samples than taxa, so a smaller, readable set is both faster and sounder.
 
 ```r
 library(SpiecEasi); library(igraph); library(ggraph); library(tidygraph)

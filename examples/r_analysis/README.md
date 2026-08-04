@@ -58,7 +58,7 @@ would give a meaningful decontam result here.
 | `metadata.tsv` | `SampleID`, `Environment`, `OriginalSampleType`, `SampleType`. |
 | `make_inputs.R` | Derives the three TSVs from GlobalPatterns (run to regenerate inputs). |
 | `run_example.R` | Runs the workflow and writes every figure. `set.seed(42)`. |
-| `figures/` | Exported PNG (200 dpi) + SVG. |
+| `figures/` | Exported PNG (200 dpi), numbered 01–14; vector SVG twins in `figures/svg/`. |
 | `alpha_stats.txt` | Alpha-diversity tests: Kruskal-Wallis + pairwise Wilcoxon (BH), per metric. |
 | `permanova_results.txt` | Full PERMANOVA tables (Bray-Curtis and Aitchison). |
 | `ancombc2_full_res.tsv` | Full ANCOM-BC2 result table (all genera, all columns). |
@@ -81,10 +81,9 @@ policy is unchanged: readers run Part 2 locally on their own machine; these
 figures were generated only to show expected output. `ggpubr` is not required —
 significance brackets are drawn with base ggplot2.
 
-The two supplementary figures need extra packages, each guarded so the script
-skips them cleanly if absent: `14_core_microbiome` needs `microbiome`;
-`15_spieceasi_network` needs `igraph`, `ggraph` and **`SpiecEasi`**, which is
-GitHub-only — `remotes::install_github("zdk123/SpiecEasi")`.
+The supplementary network figure needs extra packages, guarded so the script
+skips it cleanly if absent: `14_spieceasi_network` needs `igraph`, `ggraph` and
+**`SpiecEasi`**, which is GitHub-only — `remotes::install_github("zdk123/SpiecEasi")`.
 
 ## Figure inventory
 
@@ -103,5 +102,4 @@ GitHub-only — `remotes::install_github("zdk123/SpiecEasi")`.
 | `11_ancombc2_lfc` | §10 | ANCOM-BC2 log fold changes (significant genera). |
 | `12_indicator_species` | §11 | Top indicator taxa (IndVal.g, FDR < 0.05). |
 | `13_publication_figure` | §12 | Publication-style composite of the key panels. |
-| `14_core_microbiome` | — (supplementary) | Core-microbiome size vs detection threshold, per environment. **Not a SOP step** — an extra example only. |
-| `15_spieceasi_network` | — (supplementary) | SPIEC-EASI co-occurrence network on prevalent genera (nodes = genera by phylum, edges = sign of association). **Not a SOP step** — illustrative; n=20 is modest and cross-environment edges partly reflect shared habitat. |
+| `14_spieceasi_network` | §12 | SPIEC-EASI co-occurrence network on prevalent genera (nodes = genera by phylum, edges = sign of association). Optional (§12); illustrative — n=20 is modest and cross-environment edges partly reflect shared habitat. |

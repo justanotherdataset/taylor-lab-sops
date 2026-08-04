@@ -46,6 +46,7 @@ script_dir <- (function() {
 })()
 FIGDIR <- file.path(script_dir, "figures")
 dir.create(FIGDIR, showWarnings = FALSE, recursive = TRUE)
+dir.create(file.path(FIGDIR, "svg"), showWarnings = FALSE, recursive = TRUE)  # vector twins kept here
 
 ## ---- colour-blind-safe palette (Okabe-Ito) ---------------------------------
 env_cols <- c(Human = "#D55E00", Freshwater = "#0072B2", Saline = "#009E73")
@@ -56,13 +57,13 @@ pal11 <- c("#E69F00","#56B4E9","#009E73","#F0E442","#0072B2","#D55E00",
 produced <- character(0)
 save_gg <- function(p, name, w = 8, h = 5.5, dpi = 200) {
   ggsave(file.path(FIGDIR, paste0(name, ".png")), p, width = w, height = h, dpi = dpi)
-  try(ggsave(file.path(FIGDIR, paste0(name, ".svg")), p, width = w, height = h), silent = TRUE)
+  try(ggsave(file.path(FIGDIR, "svg", paste0(name, ".svg")), p, width = w, height = h), silent = TRUE)
   produced <<- c(produced, name)
 }
 save_base <- function(fn, name, w = 8, h = 5.5, dpi = 200) {
   png(file.path(FIGDIR, paste0(name, ".png")), width = w, height = h, units = "in", res = dpi)
   fn(); dev.off()
-  svg(file.path(FIGDIR, paste0(name, ".svg")), width = w, height = h); fn(); dev.off()
+  svg(file.path(FIGDIR, "svg", paste0(name, ".svg")), width = w, height = h); fn(); dev.off()
   produced <<- c(produced, name)
 }
 step <- function(name, expr) {
@@ -583,16 +584,8 @@ if (HAVE_MICROBIOME) {
     cat("Core genera per environment (det 0.1%, prev 50%):\n"); print(core_tab)
     writeLines(capture.output(print(core_tab)),
                file.path(script_dir, "core_microbiome.txt"))
-    p_core <- ggplot(core_curve, aes(detection, n_core, colour = Environment)) +
-      geom_line(linewidth = 0.8) + geom_point(size = 2) +
-      scale_colour_manual(values = env_cols) +
-      scale_x_log10(labels = scales::label_percent()) +
-      labs(x = "Detection threshold (relative abundance, log scale)",
-           y = "Number of core genera",
-           title = "Core microbiome size by environment (supplementary; not a SOP step)",
-           subtitle = "core = genera at >=50% prevalence within an environment") +
-      theme(legend.position = "bottom")
-    save_gg(p_core, "14_core_microbiome", w = 8, h = 5.5)
+    # Core-microbiome figure removed: it was an orphan (no SOP section embeds it).
+    # The core_microbiome.txt summary above is kept as a supplementary output.
   })
 } else {
   cat("\n----- Fig 14 core microbiome SKIPPED: microbiome not installed -----\n")
@@ -677,7 +670,7 @@ if (requireNamespace("SpiecEasi", quietly = TRUE) &&
            subtitle = "top prevalent genera; n=20 across 3 environments — illustrative, associations partly reflect habitat",
            fill = "Phylum", edge_colour = "Association", size = "Degree") +
       theme_void() + theme(legend.position = "right")
-    save_gg(p_net, "15_spieceasi_network", w = 11, h = 8)
+    save_gg(p_net, "14_spieceasi_network", w = 11, h = 8)
   })
 } else {
   cat("\n----- Fig 15 SPIEC-EASI SKIPPED: SpiecEasi/igraph/ggraph not all installed -----\n")

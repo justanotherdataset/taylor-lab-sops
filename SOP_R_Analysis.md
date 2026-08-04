@@ -1313,7 +1313,7 @@ ggraph(as_tbl_graph(g), layout = "fr") +
 
 The saved figure below additionally colours nodes by phylum and labels the hub genera; that styling is in `examples/r_analysis/run_example.R`.
 
-![SPIEC-EASI co-occurrence network](examples/r_analysis/figures/15_spieceasi_network.png)
+![SPIEC-EASI co-occurrence network](examples/r_analysis/figures/14_spieceasi_network.png)
 
 *Expected output. The 50 most prevalent genera, coloured by phylum and sized by degree; edges are SPIEC-EASI associations (blue positive, orange negative) with the ten hubs labelled. Read it as which taxa move together, not as proof of interaction — with n = 20 spanning three environments, many edges partly reflect shared habitat rather than direct ecology.*
 

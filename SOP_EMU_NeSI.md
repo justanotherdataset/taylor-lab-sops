@@ -1,17 +1,17 @@
 *Taylor Lab | Full-Length 16S rRNA Nanopore SOP*
 
-# **Part 1: NeSI Pipeline (Sequencing to Count Tables)**
+# **NeSI Pipeline: Sequencing to Count Tables**
 
 **v2.0** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S | suite v1.1 (August 2026)
 
 **Contents:** [Quick Roadmap](#quick-roadmap) · [1. Getting Started on NeSI](#1-getting-started-on-nesi) · [2. Understanding Your Data](#2-understanding-your-data) · [3. Processing Nanopore Reads](#3-processing-nanopore-reads) · [4. Taxonomy and Community Profiling with Emu](#4-taxonomy-and-community-profiling-with-emu) · [Troubleshooting](#troubleshooting) · [Appendices](#appendices)
 
-This document covers everything from logging into NeSI through to generating combined count tables with Emu. The statistics that follow are in `SOP_R_Analysis.md`, which numbers its own sections from 1. It assumes no prior command-line experience and starts from `pwd` — it is the only document in this set that teaches the cluster itself. The other cluster SOPs (`SOP_CONCOMPRA_NeSI.md`, `SOP_READBASED_NeSI.md`, `SOP_ASSEMBLY_NeSI.md`) point back here for the bash and SLURM groundwork; `SOP_R_Analysis.md` (Part 2) runs locally and stands on its own.
+This document covers everything from logging into NeSI through to generating combined count tables with Emu. The statistics that follow are in `SOP_R_Analysis.md`, which numbers its own sections from 1. It assumes no prior command-line experience and starts from `pwd` — it is the only document in this set that teaches the cluster itself. The other cluster SOPs (`SOP_CONCOMPRA_NeSI.md`, `SOP_READBASED_NeSI.md`, `SOP_ASSEMBLY_NeSI.md`) point back here for the bash and SLURM groundwork; `SOP_R_Analysis.md` (the R analysis) runs locally and stands on its own.
 
 ### **Before You Start**
 
 - **You need** a NeSI account and project code (`<your_nesi_project_code>`), your raw Nanopore FASTQs, and about a day of wall-clock time across the queue. Replace `<your_nesi_project_code>` and `<your_project>` with your own values throughout.
-- **This does not cover** the R statistics (that is Part 2, `SOP_R_Analysis.md`) or short-read Illumina 16S (no ASV workflow here yet).
+- **This does not cover** the R statistics (that is the R analysis, `SOP_R_Analysis.md`) or short-read Illumina 16S (no ASV workflow here yet).
 - **No prior terminal experience needed** — this document starts at `pwd`. Section 1 teaches the cluster (login, bash, modules, SLURM); Section 2 teaches the data (16S, FASTQ, quality scores). For more grounding first, see the Genomics Aotearoa links in the appendix.
 
 ## **Quick Roadmap**
@@ -22,7 +22,7 @@ This document covers everything from logging into NeSI through to generating com
 [3] Processing reads          ->  NanoPlot QC -> chopper filter -> NanoPlot QC
 [4] Emu profiling             ->  databases -> array run -> combined tables
          |
-         v  count + taxonomy tables  ->  SOP_R_Analysis.md (Part 2)
+         v  count + taxonomy tables  ->  SOP_R_Analysis.md
 ```
 
 ## **1. Getting Started on NeSI**
@@ -781,9 +781,9 @@ We round to whole numbers in R before analysis. This adds a little imprecision b
 
 After all array tasks finish, merge the per-sample files into combined tables.
 
-Use the `04_combine_emu_results.py` script below — this is the **standard method**, and the one Part 2 expects. It produces separate abundance and counts tables with identical column layouts across every database in one pass, and it parses both the split-column format and any single-column semicolon-delimited lineage format into the same structure. This keeps the downstream R code identical no matter which database a table came from, and it writes the exact filename Part 2 loads (`emu-combined-counts_<db>.tsv`).
+Use the `04_combine_emu_results.py` script below — this is the **standard method**, and the one the R analysis expects. It produces separate abundance and counts tables with identical column layouts across every database in one pass, and it parses both the split-column format and any single-column semicolon-delimited lineage format into the same structure. This keeps the downstream R code identical no matter which database a table came from, and it writes the exact filename the R analysis loads (`emu-combined-counts_<db>.tsv`).
 
-Emu also ships a built-in `combine-outputs` subcommand. It is a quick way to eyeball one database's results, but it writes different filenames that Part 2 does not read, so use the script here for anything feeding Part 2 — see *Alternative: `emu combine-outputs`* at the end of this section.
+Emu also ships a built-in `combine-outputs` subcommand. It is a quick way to eyeball one database's results, but it writes different filenames that the R analysis does not read, so use the script here for anything feeding the R analysis — see *Alternative: `emu combine-outputs`* at the end of this section.
 
 > **Note:** Whether a given SILVA build ships split-rank columns or a single lineage string depends on the exact prebuilt archive. The script below handles either, so you do not have to check first. Verify the header of your own combined output (`head -1 emu-combined-counts_silva.tsv`) if you want to confirm the layout.
 >
@@ -960,7 +960,7 @@ Download the counts and abundance files to your computer for the R analysis.
 
 #### **Alternative: `emu combine-outputs`**
 
-Emu's built-in `combine-outputs` subcommand merges the per-sample tables for one database at a time. It is handy for a quick look, but its output is named `emu-combined-<rank>.tsv` (and, with `--counts`, `emu-combined-<rank>-counts.tsv`) — **not** the `emu-combined-counts_<db>.tsv` that Part 2 loads — so it is not the handoff. Use `04_combine_emu_results.py` above for anything feeding Part 2.
+Emu's built-in `combine-outputs` subcommand merges the per-sample tables for one database at a time. It is handy for a quick look, but its output is named `emu-combined-<rank>.tsv` (and, with `--counts`, `emu-combined-<rank>-counts.tsv`) — **not** the `emu-combined-counts_<db>.tsv` that the R analysis loads — so it is not the handoff. Use `04_combine_emu_results.py` above for anything feeding the R analysis.
 
 ```bash
 # One database, species level: abundance then counts

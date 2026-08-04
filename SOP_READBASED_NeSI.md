@@ -850,7 +850,7 @@ humann_split_stratified_table -i tables/ko_cpm.tsv -o tables/
 Skip this only if you have no low-biomass samples, and write down why.
 
 1. **Look at your controls directly.** Finding reagent contaminants in blanks is expected, not anomalous. The usual suspects are *Ralstonia*, *Burkholderia*, *Bradyrhizobium*, *Pseudomonas*, *Cutibacterium* and *Delftia*.
-2. **Screen with `decontam`**, which `SOP_R_Analysis.md` already covers. Use the **prevalence** method: it needs only the abundance table, no DNA concentrations. Feed it the reshaped `part2_relab.tsv` from Section 13 (not the raw `merged_species.tsv`, which Part 2 silently rounds — see Section 13). `Squeegee` and `MicrobIEM` are alternatives.
+2. **Screen with `decontam`**, which `SOP_R_Analysis.md` already covers. Use the **prevalence** method: it needs only the abundance table, no DNA concentrations. Feed it the reshaped `part2_relab.tsv` from Section 13 (not the raw `merged_species.tsv`, which the R analysis silently rounds — see Section 13). `Squeegee` and `MicrobIEM` are alternatives.
 3. **Check the mock community.** Anything you expected to see and did not is either a casualty of host depletion (Section 7) or a gap in the database. Both are worth knowing about.
 4. **Report, do not silently remove.** Record which taxa you removed, by what method, at what threshold — then re-run the primary analysis with and without them and report whether the conclusions change.
 
@@ -860,11 +860,11 @@ Skip this only if you have no low-biomass samples, and write down why.
 
 Follow `SOP_R_Analysis.md` for the mechanics. This section covers only what differs because your input is MetaPhlAn relative abundance rather than an amplicon count table.
 
-Two rows below (UniFrac, Faith's PD) are additions rather than changes: Part 2 covers no phylogenetic diversity at all, because the upstream tools disagree on whether they emit a tree — Emu does not, while CONCOMPRA and MetaPhlAn both do — so it is left to the upstream document or your own code.
+Two rows below (UniFrac, Faith's PD) are additions rather than changes: the R analysis covers no phylogenetic diversity at all, because the upstream tools disagree on whether they emit a tree — Emu does not, while CONCOMPRA and MetaPhlAn both do — so it is left to the upstream document or your own code.
 
-### **Reshape Before You Open Part 2**
+### **Reshape Before You Open the R Analysis**
 
-`SOP_R_Analysis.md` assumes an integer count table with taxonomy in named rank columns. MetaPhlAn produces neither, so **reshape before you open Part 2** — Part 2's data-loading step, Section 3, will round your percentages into small integers rather than reject them, and every figure after that will be produced from destroyed data without an error anywhere. Split `clade_name` into the rank columns Part 2 expects, and decide which of the two tables each analysis takes:
+`SOP_R_Analysis.md` assumes an integer count table with taxonomy in named rank columns. MetaPhlAn produces neither, so **reshape before you open the R analysis** — the R analysis's data-loading step, Section 3, will round your percentages into small integers rather than reject them, and every figure after that will be produced from destroyed data without an error anywhere. Split `clade_name` into the rank columns the R analysis expects, and decide which of the two tables each analysis takes:
 
 ```bash
 python3 - <<'PY'
@@ -893,14 +893,14 @@ You also need metadata keyed by sample ID, with group, batch or run, and every c
 | **Chao1 / ACE** | **Invalid.** Both extrapolate from singletons and doubletons, which a marker-gene profile does not have. |
 | **Observed richness** | Computable, but it tracks sequencing depth and MetaPhlAn's detection threshold rather than diversity, so it is not comparable across samples as-is. Define it as "species above X% relative abundance at matched depth" and report X. Shannon, Simpson and Pielou are safe. |
 | **decontam** | Prevalence method (Section 12). |
-| **ANCOM-BC2, ALDEx2** | Need `merged_species_counts.tsv`, not `merged_species.tsv` — and **`round()` it first**, because these are model-estimated floats and both tools expect integers. Part 2 does the same to Emu's EM estimates. |
+| **ANCOM-BC2, ALDEx2** | Need `merged_species_counts.tsv`, not `merged_species.tsv` — and **`round()` it first**, because these are model-estimated floats and both tools expect integers. The R analysis does the same to Emu's EM estimates. |
 | **`ps_raw` / `ps_srs` suffixes** | Use `ps_relab` and `ps_estcounts`, so the object-naming discipline still tells you what a table holds. |
-| **UniFrac** | **Available here, though Part 2 does not cover it.** MetaPhlAn 4 ships the SGB phylogeny with its database: `metaphlan/utils/calculate_diversity.R -d beta -m unweighted-unifrac -t <tree> -s t__`. The tree's tips are SGBs, so it needs the `t__` rows that Section 11 strips out — keep an SGB-level table as well if you want this. |
+| **UniFrac** | **Available here, though the R analysis does not cover it.** MetaPhlAn 4 ships the SGB phylogeny with its database: `metaphlan/utils/calculate_diversity.R -d beta -m unweighted-unifrac -t <tree> -s t__`. The tree's tips are SGBs, so it needs the `t__` rows that Section 11 strips out — keep an SGB-level table as well if you want this. |
 | **Faith's PD** | Not among `calculate_diversity.R`'s alpha metrics (richness, Shannon, Simpson, Gini), but computable in R from the same tree. |
 
 ### **Beta Diversity**
 
-Use Bray–Curtis, Aitchison, or both. These abundances are **compositional** — proportions of a fixed total, so one taxon rising forces the others down, and they carry only relative information (Part 2 owns the full treatment). Aitchison requires you to choose how to handle zeros, and to state the choice:
+Use Bray–Curtis, Aitchison, or both. These abundances are **compositional** — proportions of a fixed total, so one taxon rising forces the others down, and they carry only relative information (the R analysis owns the full treatment). Aitchison requires you to choose how to handle zeros, and to state the choice:
 
 | Approach | Trade-off |
 | --- | --- |

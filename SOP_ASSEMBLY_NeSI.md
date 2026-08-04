@@ -80,7 +80,7 @@ A MAG is a sequence with no name until you classify it. **GTDB-Tk** places each 
 
 ### **The final table is compositional**
 
-The last step (Section 14) maps every sample's reads back to the dereplicated MAG set and builds a **MAG × sample abundance table**. Because it is coverage-derived relative abundance — proportions that sum to a whole — it is **compositional**, and behaves like `SOP_READBASED_NeSI.md`'s MetaPhlAn output, not like an amplicon count table. Section 15 spells out what that changes in Part 2.
+The last step (Section 14) maps every sample's reads back to the dereplicated MAG set and builds a **MAG × sample abundance table**. Because it is coverage-derived relative abundance — proportions that sum to a whole — it is **compositional**, and behaves like `SOP_READBASED_NeSI.md`'s MetaPhlAn output, not like an amplicon count table. Section 15 spells out what that changes in the R analysis.
 
 ---
 
@@ -600,7 +600,7 @@ gtdbtk classify_wf --genome_dir drep/dereplicated_genomes -x fa \
 
 ### **Convert GTDB ranks to the repository vocabulary**
 
-GTDB writes taxonomy as `d__Bacteria;p__…;s__…`. Part 2 expects the lab's seven lowercase ranks (`superkingdom` … `species`). Convert now, so the handoff table in Section 14 carries clean ranks:
+GTDB writes taxonomy as `d__Bacteria;p__…;s__…`. The R analysis expects the lab's seven lowercase ranks (`superkingdom` … `species`). Convert now, so the handoff table in Section 14 carries clean ranks:
 
 ```bash
 srun --account=<your_nesi_project_code> --time=00:15:00 --mem=4G --pty bash
@@ -782,13 +782,13 @@ coverm genome --coupled "${READS[@]}" \
 
 ---
 
-## **15. Handoff to Part 2**
+## **15. Handoff to the R Analysis**
 
 Follow `SOP_R_Analysis.md` for the statistics. This section covers only what differs because MAG abundances are **coverage-derived and compositional**, not amplicon counts. The differences mirror the read-based SOP's Section 13 — a MAG × sample table behaves like a MetaPhlAn table, not like an Emu count table.
 
-### **Reshape before you open Part 2**
+### **Reshape before you open the R analysis**
 
-Part 2 expects taxa in rows with named rank columns before the sample columns. Join CoverM's abundances to the GTDB taxonomy from Section 11:
+The R analysis expects taxa in rows with named rank columns before the sample columns. Join CoverM's abundances to the GTDB taxonomy from Section 11:
 
 ```bash
 srun --account=<your_nesi_project_code> --time=00:15:00 --mem=4G --pty bash
@@ -809,7 +809,7 @@ PY
 
 `part2_relab.tsv` holds relative abundance; use it for beta diversity and `decontam`, and never round it or pass it through SRS. `part2_counts.tsv` holds read counts; round it in R and use it **only** for differential abundance.
 
-### **What changes in Part 2**
+### **What changes in the R analysis**
 
 | Step | On MAG input |
 | --- | --- |
@@ -819,7 +819,7 @@ PY
 | **decontam** | Prevalence method, on `part2_relab.tsv`. |
 | **Differential abundance** | Use `part2_counts.tsv`, rounded. ANCOM-BC2 and ALDEx2 need counts; treat the abundances as compositional and use compositionally aware methods. |
 | **`ps_` object names** | `ps_relab` and `ps_estcounts`, as in the read-based SOP — the suffix names what the table holds. |
-| **phylogenetic diversity (UniFrac, Faith's PD)** | **Available, unlike the read-based path.** GTDB-Tk emits a placement tree (`gtdbtk/classify/*.classify.tree`); with it you can compute UniFrac and Faith's PD in R. Part 2 does not cover the mechanics, so treat this as your own extension. |
+| **phylogenetic diversity (UniFrac, Faith's PD)** | **Available, unlike the read-based path.** GTDB-Tk emits a placement tree (`gtdbtk/classify/*.classify.tree`); with it you can compute UniFrac and Faith's PD in R. The R analysis does not cover the mechanics, so treat this as your own extension. |
 
 ### **Where MAG analysis legitimately diverges**
 

@@ -1,6 +1,8 @@
 *Taylor Lab | Microbial community analysis in R*
 
-# **Part 2: R Analysis (Count Tables to Results)**
+# **R Analysis: Count Tables to Results**
+
+*The shared downstream analysis for this suite: whichever upstream SOP produced your count table (Emu, CONCOMPRA, read-based shotgun, or assembly), the analysis continues here.*
 
 **v2.1** | last updated July 2026 | runs locally in R, not on NeSI | platform-agnostic | suite v1.1 (August 2026)
 
@@ -12,10 +14,10 @@ The **code** examples use variable and site names from Cam's tuatara PhD study (
 
 ### **Before You Start**
 
-- **You need R on your own machine.** Part 2 runs locally, not on NeSI. Install a current R (RStudio is the usual front end) and run the package block in Section 2 once — it is slow, so do it before you need it.
+- **You need R on your own machine.** This analysis runs locally, not on NeSI. Install a current R (RStudio is the usual front end) and run the package block in Section 2 once — it is slow, so do it before you need it.
 - **You need three files, already on this machine:** an integer count table, a taxonomy table (or ranks inside the count table) and a metadata file with a `SampleType` column. Sample IDs must match byte-for-byte across them. See "Get your files onto this machine" in Section 3 for copying them off NeSI.
-- **What this does not cover.** Producing the count table (see Part 1 for Nanopore, `SOP_READBASED_NeSI.md` for Illumina shotgun); short-read ASV workflows (DADA2); non-independent designs beyond the pointers given (repeated measures, nested, co-housed — see Troubleshooting).
-- **If you have no count table yet,** stop here and start with Part 1.
+- **What this does not cover.** Producing the count table (see `SOP_EMU_NeSI.md` for Nanopore, `SOP_READBASED_NeSI.md` for Illumina shotgun); short-read ASV workflows (DADA2); non-independent designs beyond the pointers given (repeated measures, nested, co-housed — see Troubleshooting).
+- **If you have no count table yet,** stop here and start with the upstream SOP for your data (`SOP_EMU_NeSI.md`, `SOP_CONCOMPRA_NeSI.md`, `SOP_READBASED_NeSI.md`, or `SOP_ASSEMBLY_NeSI.md`).
 
 **Worked example.** Every figure below is real output from running this workflow on the public **GlobalPatterns** 16S dataset (Caporaso et al. 2011), grouped into three environments (Human, Freshwater, Saline). It is reproducible from `examples/r_analysis/` with `Rscript run_example.R`. Object names and code follow this SOP; only the grouping variable is adapted to that data. Each caption states what to look for.
 

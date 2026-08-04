@@ -25,15 +25,15 @@ Standard operating procedures for microbial community analysis on [NeSI](https:/
 
 | File | Covers |
 | --- | --- |
-| [`SOP_EMU_NeSI.md`](SOP_EMU_NeSI.md) | **Part 1 — sequencing → count tables.** Nanopore full-length 16S: NeSI onboarding (bash, modules, SLURM), read QC, filtering, Emu profiling against SILVA and RDP, combined count tables. The only document that teaches the cluster itself, starting from `pwd`. |
-| [`SOP_R_Analysis.md`](SOP_R_Analysis.md) | **Part 2 — count tables → results.** phyloseq, decontam, SRS normalisation, alpha/beta diversity, PERMANOVA, differential abundance (ANCOM-BC2 and MaAsLin2, ALDEx2 noted), indicator species, common pitfalls. Platform-agnostic; runs locally in R. |
-| [`SOP_CONCOMPRA_NeSI.md`](SOP_CONCOMPRA_NeSI.md) | **Runs after Part 1, same Nanopore data.** Reference-free consensus OTUs alongside Emu's assignments: install, dedup, run configuration, submission, verification, then SINTAX taxonomy, MAFFT alignment, FastTree phylogeny. Takes Part 1's filtered reads as input and hands off to Part 2. |
-| [`SOP_READBASED_NeSI.md`](SOP_READBASED_NeSI.md) | **Illumina shotgun, read-based.** Governance and controls, trimming and PhiX removal, host depletion against T2T-CHM13, depth gates, taxonomy (MetaPhlAn 4), function (HUMAnN), contamination screening, and what changes in Part 2 for compositional input. Does not re-teach the cluster — it points first-timers back to Part 1 Section 1. |
-| [`SOP_ASSEMBLY_NeSI.md`](SOP_ASSEMBLY_NeSI.md) | **Illumina shotgun, assembly-based.** Takes the read-based SOP's clean, host-depleted reads and reconstructs genomes: assembly (MEGAHIT/metaSPAdes), coverage mapping, binning (MetaBAT2, MaxBin2, CONCOCT) with DAS_Tool refinement, MAG quality (CheckM2, MIMAG tiers), dereplication (dRep), taxonomy (GTDB-Tk), annotation (Bakta; eggNOG/DRAM optional), and a MAG × sample abundance table. Hands off to Part 2 with compositional deltas (its Section 15). |
+| [`SOP_EMU_NeSI.md`](SOP_EMU_NeSI.md) | **Upstream (Nanopore 16S) — sequencing → count tables.** Nanopore full-length 16S: NeSI onboarding (bash, modules, SLURM), read QC, filtering, Emu profiling against SILVA and RDP, combined count tables. The only document that teaches the cluster itself, starting from `pwd`. |
+| [`SOP_R_Analysis.md`](SOP_R_Analysis.md) | **Downstream (all pipelines) — count tables → results.** phyloseq, decontam, SRS normalisation, alpha/beta diversity, PERMANOVA, differential abundance (ANCOM-BC2 and MaAsLin2, ALDEx2 noted), indicator species, common pitfalls. Platform-agnostic; runs locally in R. |
+| [`SOP_CONCOMPRA_NeSI.md`](SOP_CONCOMPRA_NeSI.md) | **Runs after `SOP_EMU_NeSI.md`, same Nanopore data.** Reference-free consensus OTUs alongside Emu's assignments: install, dedup, run configuration, submission, verification, then SINTAX taxonomy, MAFFT alignment, FastTree phylogeny. Takes the Emu pipeline's filtered reads as input and hands off to the R analysis. |
+| [`SOP_READBASED_NeSI.md`](SOP_READBASED_NeSI.md) | **Illumina shotgun, read-based.** Governance and controls, trimming and PhiX removal, host depletion against T2T-CHM13, depth gates, taxonomy (MetaPhlAn 4), function (HUMAnN), contamination screening, and what changes in the R analysis for compositional input. Does not re-teach the cluster — it points first-timers back to `SOP_EMU_NeSI.md` Section 1. |
+| [`SOP_ASSEMBLY_NeSI.md`](SOP_ASSEMBLY_NeSI.md) | **Illumina shotgun, assembly-based.** Takes the read-based SOP's clean, host-depleted reads and reconstructs genomes: assembly (MEGAHIT/metaSPAdes), coverage mapping, binning (MetaBAT2, MaxBin2, CONCOCT) with DAS_Tool refinement, MAG quality (CheckM2, MIMAG tiers), dereplication (dRep), taxonomy (GTDB-Tk), annotation (Bakta; eggNOG/DRAM optional), and a MAG × sample abundance table. Hands off to the R analysis with compositional deltas (its Section 15). |
 
-**Part 2 is platform-agnostic** — one R document, not one per platform. Once you have a count table, a taxonomy table and a metadata file, the R workflow is identical whether the reads were profiled with Emu, CONCOMPRA or MetaPhlAn; only the interpretation differs (Part 1 covers this under "Full-length vs short-read"; the read-based SOP's Section 13 lists what changes when the input is relative abundance rather than counts).
+**The R analysis is platform-agnostic** — one R document, not one per platform. Once you have a count table, a taxonomy table and a metadata file, the R workflow is identical whether the reads were profiled with Emu, CONCOMPRA or MetaPhlAn; only the interpretation differs (`SOP_EMU_NeSI.md` covers this under "Full-length vs short-read"; the read-based SOP's Section 13 lists what changes when the input is relative abundance rather than counts).
 
-**Start with Part 1 if this is your first pipeline** — it is the only document that teaches the cluster (bash, modules, SLURM, array jobs). The two cluster documents downstream of it (CONCOMPRA, read-based) say so at the top and point back to Part 1 Section 1; Part 2 runs locally and legitimately does not.
+**Start with `SOP_EMU_NeSI.md` if this is your first pipeline** — it is the only document that teaches the cluster (bash, modules, SLURM, array jobs). The two cluster documents downstream of it (CONCOMPRA, read-based) say so at the top and point back to `SOP_EMU_NeSI.md` Section 1; the R analysis runs locally and legitimately does not.
 
 ## Before you start
 
@@ -41,13 +41,13 @@ Standard operating procedures for microbial community analysis on [NeSI](https:/
 
 - **Storage planned on day one** — databases on `/nesi/nobackup/`, scripts and final tables on the backed-up `/nesi/project/`; the read-based database set alone runs to ~85–95 GB.
 
-- **R on your own machine** — Part 2 runs locally, so install a current R and the Part 2 packages before you need them, not on NeSI.
+- **R on your own machine** — the R analysis runs locally, so install a current R and its packages before you need them, not on NeSI.
 
 ## Tool versions
 
 The NeSI modules these SOPs were written against, confirmed present on Mahuika in July 2026. Every one will drift — confirm with `module spider <tool>` (capitalisation included) before you rely on a string.
 
-**Amplicon, Nanopore (Part 1):**
+**Amplicon, Nanopore:**
 
 | Tool | Module string | Purpose |
 | --- | --- | --- |
@@ -88,7 +88,7 @@ HUMAnN is deliberately **not** taken from a module — NeSI's `Humann/3.0.0.alph
 
 GTDB-Tk, CheckM2, Bakta, eggNOG-mapper (`eggnog-mapper/2.1.12-gimkl-2022a`) and DRAM (`DRAM/1.3.5-Miniconda3`) resolve their large reference databases from NeSI's central `/opt/nesi/db` — nothing to download.
 
-Reference databases: SILVA v138.1 and RDP for the amplicon work, via Emu's prebuilt OSF archives. Part 1 explains why we use the validated v138.1 build rather than the newer SILVA 138.2 archive, and why we run both databases and compare. The read-based SOP pins the MetaPhlAn index explicitly (`mpa_vJun23_CHOCOPhlAnSGB_202403`) and explains why an unpinned index makes results depend on when the database was last refreshed.
+Reference databases: SILVA v138.1 and RDP for the amplicon work, via Emu's prebuilt OSF archives. `SOP_EMU_NeSI.md` explains why we use the validated v138.1 build rather than the newer SILVA 138.2 archive, and why we run both databases and compare. The read-based SOP pins the MetaPhlAn index explicitly (`mpa_vJun23_CHOCOPhlAnSGB_202403`) and explains why an unpinned index makes results depend on when the database was last refreshed.
 
 ## Contributing
 
@@ -110,10 +110,10 @@ If these SOPs shaped your methods, cite the underlying tools rather than this re
 
 | Document | Primary references |
 | --- | --- |
-| **Part 1 (Emu)** | Emu — Curry et al. 2022, *Nature Methods*; chopper — De Coster & Rademakers 2023, *Bioinformatics*; SILVA — Quast et al. 2013, *Nucleic Acids Research*. |
+| **Nanopore amplicons (Emu)** | Emu — Curry et al. 2022, *Nature Methods*; chopper — De Coster & Rademakers 2023, *Bioinformatics*; SILVA — Quast et al. 2013, *Nucleic Acids Research*. |
 | **CONCOMPRA** | the pipeline — Stock et al. 2025; SINTAX — Edgar 2016; MAFFT — Katoh & Standley 2013; FastTree — Price et al. 2010 (all in that SOP's Appendix B). |
 | **Read-based shotgun** | MetaPhlAn 4 — Blanco-Míguez et al. 2023, *Nature Biotechnology*; re-identification from residual human reads — Tomofuji et al. 2023, *Nature Microbiology*; DA-method benchmarking — Yang & Chen 2022, *Microbiome*. |
-| **Part 2 (R)** | rarefaction debate — McMurdie & Holmes 2014, *PLoS Computational Biology*, and Schloss 2024, *mSphere*; DA-method comparison — Nearing et al. 2022, *Nature Communications*; indicator species — Dufrêne & Legendre 1997, *Ecological Monographs*. |
+| **R analysis** | rarefaction debate — McMurdie & Holmes 2014, *PLoS Computational Biology*, and Schloss 2024, *mSphere*; DA-method comparison — Nearing et al. 2022, *Nature Communications*; indicator species — Dufrêne & Legendre 1997, *Ecological Monographs*. |
 
 For the remaining R packages, look up the citation with `citation("phyloseq")` and equivalents. Record your package versions with `sessionInfo()` and keep the output alongside your results. For shotgun work, the read-based SOP's Section 14 lists what a methods section needs — the MetaPhlAn index tag, the HUMAnN and ChocoPhlAn/UniRef versions, whether the host reference was masked, the depth gates, which samples were excluded and why, and every model formula.
 

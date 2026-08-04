@@ -593,7 +593,7 @@ diff /tmp/otu_samples.txt /tmp/meta_samples.txt   # no output means they match
 
 ### **Building the phyloseq object**
 
-`SOP_R_Analysis.md` opens on a tab-separated table with taxonomy in named rank columns. CONCOMPRA produces a comma-separated OTU table, taxonomy in a separate SINTAX file and a Newick tree, so **convert the folder once, here** — Part 2 has no code for any of the three formats and will not tell you it is looking at the wrong shape:
+`SOP_R_Analysis.md` opens on a tab-separated table with taxonomy in named rank columns. CONCOMPRA produces a comma-separated OTU table, taxonomy in a separate SINTAX file and a Newick tree, so **convert the folder once, here** — the R analysis has no code for any of the three formats and will not tell you it is looking at the wrong shape:
 
 ```r
 library(phyloseq); library(phangorn); library(ape)
@@ -616,7 +616,7 @@ rownames(tax) <- rownames(sx)
 
 tree <- midpoint(read.tree("otu_tree.nwk"))   # FastTree output is unrooted
 
-# Same OTUs in all three, in the same order — Part 2 indexes them positionally.
+# Same OTUs in all three, in the same order — the R analysis indexes them positionally.
 keep <- Reduce(intersect, list(rownames(otu), rownames(tax), tree$tip.label))
 stopifnot(length(keep) > 0)
 write.table(cbind(tax_id = keep, tax[keep, ], otu[keep, ]),
@@ -624,13 +624,13 @@ write.table(cbind(tax_id = keep, tax[keep, ], otu[keep, ]),
 saveRDS(drop.tip(tree, setdiff(tree$tip.label, keep)), "tree_concompra.rds")
 ```
 
-`counts_concompra.tsv` is now in the shape Part 2's data-loading step (Section 3) describes: substitute its filename for `emu-combined-counts_silva.tsv` there. The rank names are Part 2's (`superkingdom` … not `Domain`), which is what its barplot and `tax_level = "genus"` code expects. Keep `tree_concompra.rds`: Part 2 does not use it, but it lets you add phylogenetic-diversity analyses (UniFrac, Faith's PD) yourself if you want them.
+`counts_concompra.tsv` is now in the shape the R analysis's data-loading step (Section 3) describes: substitute its filename for `emu-combined-counts_silva.tsv` there. The rank names are the R analysis's (`superkingdom` … not `Domain`), which is what its barplot and `tax_level = "genus"` code expects. Keep `tree_concompra.rds`: the R analysis does not use it, but it lets you add phylogenetic-diversity analyses (UniFrac, Faith's PD) yourself if you want them.
 
-Two things Part 2 does not know about CONCOMPRA output:
+Two things the R analysis does not know about CONCOMPRA output:
 
-- **Counts are integers already.** Part 2's `round()` step is a no-op here; leave it in, and the relative-abundance guard above it will pass.
+- **Counts are integers already.** The R analysis's `round()` step is a no-op here; leave it in, and the relative-abundance guard above it will pass.
 
-- **Prevalence filtering.** Low-prevalence OTUs from per-sample consensus are often genuine rare taxa, so Part 2's `prv_cut = 0.10` — tuned for Illumina **ASV** data (amplicon sequence variants, the exact-sequence features short-read pipelines call, the short-read counterpart of these consensus OTUs) — may over-filter here. **Start at `prv_cut = 0.05`** (half the Illumina default), record what you used, and set `prv_cut = 0` to disable prevalence filtering entirely when rare taxa are the study's point.
+- **Prevalence filtering.** Low-prevalence OTUs from per-sample consensus are often genuine rare taxa, so the R analysis's `prv_cut = 0.10` — tuned for Illumina **ASV** data (amplicon sequence variants, the exact-sequence features short-read pipelines call, the short-read counterpart of these consensus OTUs) — may over-filter here. **Start at `prv_cut = 0.05`** (half the Illumina default), record what you used, and set `prv_cut = 0` to disable prevalence filtering entirely when rare taxa are the study's point.
 
 **Template.** CONCOMPRA's `CONCOMPRA_local_postprocessing.R` in the upstream repo is a starting point; adapt its paths to this folder.
 

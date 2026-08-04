@@ -1259,9 +1259,9 @@ A **co-occurrence network** shows which taxa rise and fall together across sampl
 
 **Do not build one by correlating relative abundances.** Because proportions sum to 1, one taxon rising forces the rest down, so Pearson or Spearman on proportions manufactures negative associations that are artefacts of the constraint rather than biology.
 
-We use **SPIEC-EASI** (Kurtz et al. 2015) instead. It CLR-transforms the counts first — the same compositional fix as Aitchison distance — then infers a *conditional* dependency graph: an edge means two taxa are associated after accounting for every other taxon, rather than by a head-to-head correlation. It picks the network's sparsity by StARS stability selection instead of an arbitrary threshold, so the result is reproducible.
+We use **SPIEC-EASI** (Kurtz et al. 2015) instead. It CLR-transforms the counts first — the same compositional fix as Aitchison distance — then infers a *conditional* dependency graph: an edge means two taxa are associated after accounting for every other taxon, rather than by a head-to-head correlation. It picks the network's sparsity by StARS stability selection rather than an arbitrary threshold — a principled, data-driven choice. StARS subsamples at random, so a given run is reproducible because the seed is fixed (`set.seed()` plus `seed = 42` in `pulsar.params`, both set below), not because StARS is deterministic.
 
-This step is optional and needs four extra packages from Section 2 — `igraph`, `ggraph`, `tidygraph`, and the GitHub-only `SpiecEasi`. Work at genus level and keep the most prevalent genera: stable inference needs more samples than taxa, so a smaller, readable set is both faster and sounder.
+This step is optional and needs four extra packages from Section 2 — `igraph`, `ggraph`, `tidygraph`, and the GitHub-only `SpiecEasi`. Work at genus level and keep the most prevalent genera. SPIEC-EASI is built to infer networks where taxa outnumber samples — the worked example fits 50 genera from 20 samples — so you are not aiming for more samples than taxa; you prune to a smaller, well-supported set because it is faster, more readable, and less prone to spurious edges. More samples make the selected network more stable, but they are not a prerequisite.
 
 ```r
 library(SpiecEasi); library(igraph); library(ggraph); library(tidygraph)
@@ -1286,7 +1286,7 @@ g <- graph_from_adjacency_matrix(beta, mode = "undirected", weighted = TRUE, dia
 g <- delete_vertices(g, igraph::degree(g) == 0)
 ```
 
-**How long.** SPIEC-EASI refits the model many times for stability selection (`rep.num = 20`), so after the Bioconductor install it is the slowest step here — a few minutes on 50 taxa × 20 samples, and longer as either grows.
+**How long.** SPIEC-EASI refits the model many times for stability selection (`rep.num = 20`), so it is the step whose runtime grows fastest as taxa or samples increase. At the worked example's scale (50 taxa × 20 samples) it still finishes in well under a minute, but a real study with hundreds of taxa can run for many minutes.
 
 Confirm the network is not empty before plotting:
 

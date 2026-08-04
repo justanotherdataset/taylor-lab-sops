@@ -398,13 +398,13 @@ Two plots to check first when assessing run quality:
 
 **Read length histogram (raw):**
 
-<img width="700" height="500" alt="Read length histogram, raw" src="https://github.com/user-attachments/assets/3caf1fec-5796-4595-becc-07a36e956379" />
+![Read length histogram, raw reads](examples/emu/figures/raw_read_length_histogram.png)
 
 The distribution of read lengths. For a 16S run you want a dominant peak around 1,400-1,500 bp. The long tail below 1,000 bp is truncated amplicons (the strand fell out of the pore early), primer dimers, or off-target products. Reads above 1,800 bp are likely chimeras. Both tails are removed by chopper in the next step.
 
 **Read length vs quality scatter (raw):**
 
-<img width="700" height="500" alt="Length vs quality scatter plot, raw" src="https://github.com/user-attachments/assets/62050053-5426-4b7e-8ef5-c73f67ebcf7b" />
+![Read length vs mean quality, raw reads](examples/emu/figures/raw_length_vs_quality.png)
 
 Every dot is one read, plotted by length (x) and mean quality (y). The dense cluster around 1,450-1,500 bp at Q15-Q25 is your good amplicon data. Dots below Q10 and below 1,200 bp are what chopper will remove. After filtering, this plot should be a clean rectangle with nothing outside your filter boundaries.
 
@@ -536,13 +536,13 @@ Number, percentage and megabases of reads above quality cutoffs
 
 **Read length histogram (filtered):**
 
-<img width="700" height="500" alt="Read length histogram, filtered" src="https://github.com/user-attachments/assets/0fb8ff83-5d8b-4b34-bd29-5a49603d44d9" />
+![Read length histogram, filtered reads](examples/emu/figures/filtered_read_length_histogram.png)
 
 After filtering, expect a single tight peak around 1,400-1,500 bp with sharp cutoffs at your filter boundaries (1,200 and 1,800 bp). Compared to the raw histogram, the short-read and chimeric tails are gone. A broad peak or multiple shoulders means fragmented amplicons or off-target products.
 
 **Read length vs quality scatter (filtered):**
 
-<img width="700" height="500" alt="Length vs quality scatter plot, filtered" src="https://github.com/user-attachments/assets/939cc9ba-4733-4378-ace1-0c5a7c88258f" />
+![Read length vs mean quality, filtered reads](examples/emu/figures/filtered_length_vs_quality.png)
 
 The cloud of points should concentrate in a clean rectangle bounded by your filters: 1,200-1,800 bp on the x-axis, Q10+ on the y-axis, densest around 1,450-1,500 bp and Q15-Q25. No dots below Q10 or outside the length range should remain. This is the single most informative NanoPlot output because it shows both filter dimensions at once.
 

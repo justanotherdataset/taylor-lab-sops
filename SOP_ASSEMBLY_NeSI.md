@@ -119,7 +119,8 @@ cd "$WORK"
 ln -sf "$RB/clean" clean                         # host-depleted reads = the input
 cp "$RB/samples.txt" samples.txt
 sed -i 's/\r$//; /^$/d' samples.txt              # CRLF / blank lines become an empty $SAMPLE
-NSAMP=$(wc -l < samples.txt); echo "samples: $NSAMP"
+[ -n "$(tail -c1 samples.txt)" ] && echo >> samples.txt   # guarantee a trailing newline (else the last sample is dropped)
+NSAMP=$(grep -c . samples.txt); echo "samples: $NSAMP"    # count non-empty lines, robust to a missing final newline
 ```
 
 > **Expect** `samples: N` matching your cohort, and `ls clean/*_R1.fastq.gz | wc -l` to equal it. **Fewer** clean files than samples means the read-based pipeline did not finish for every sample — go back and complete it before assembling, or you will assemble a truncated cohort without any error.

@@ -1,5 +1,9 @@
 # Taylor Lab Bioinformatic SOPs
 
+**Taylor Lab SOP suite — v1.1 (August 2026).** Per-document versions are in each file's header; this line is the release the set was cut as one.
+
+*Suite changelog — v1.1 (August 2026): whole-suite capstone review; `SOP_ASSEMBLY_NeSI.md` added as a draft (not yet reviewed); cross-document coherence and reference fixes across the set. v1.0 (July 2026): the four Nanopore/Illumina/R SOPs, correctness- and tutorial-reviewed.*
+
 Standard operating procedures for microbial community analysis on [NeSI](https://www.nesi.org.nz/) (New Zealand eScience Infrastructure) and in R, written for someone running their first analysis. Each SOP is a complete walkthrough — what a step does, the exact commands, and what correct output looks like.
 
 ## Which SOP do I need?

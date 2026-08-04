@@ -2,7 +2,7 @@
 
 # **Part 1: NeSI Pipeline (Sequencing to Count Tables)**
 
-**v2.0** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S
+**v2.0** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S | suite v1.1 (August 2026)
 
 **Contents:** [Quick Roadmap](#quick-roadmap) · [1. Getting Started on NeSI](#1-getting-started-on-nesi) · [2. Understanding Your Data](#2-understanding-your-data) · [3. Processing Nanopore Reads](#3-processing-nanopore-reads) · [4. Taxonomy and Community Profiling with Emu](#4-taxonomy-and-community-profiling-with-emu) · [Troubleshooting](#troubleshooting) · [Appendices](#appendices)
 

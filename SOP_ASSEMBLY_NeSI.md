@@ -2,7 +2,7 @@
 
 # **Assembly and Binning: Recovering MAGs on NeSI**
 
-**v0.1** | last updated August 2026 | NeSI (SLURM) | Illumina paired-end
+**v0.1** | last updated August 2026 | NeSI (SLURM) | Illumina paired-end | suite v1.1 (August 2026, draft)
 
 > **Draft (v0.1) — not yet through the lab's correctness and tutorial review rounds.** The other SOPs in this suite have each been through two dedicated reviews; this one has not. Treat every command as unverified end-to-end: run one sample first and check each checkpoint before you rely on results or scale to a cohort.
 

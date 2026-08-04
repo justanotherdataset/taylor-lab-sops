@@ -2,7 +2,7 @@
 
 # **CONCOMPRA Pipeline: Consensus OTUs on NeSI**
 
-**v2.1** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S
+**v2.1** | last updated July 2026 | NeSI (SLURM) | Oxford Nanopore full-length 16S | suite v1.1 (August 2026)
 
 This document covers the CONCOMPRA pipeline on NeSI Mahuika: installation, run configuration, submission, verification, post-processing (taxonomy, alignment, phylogeny), and preparing outputs for R. CONCOMPRA builds reference-free consensus OTUs rather than aligning reads to a reference. Its outputs feed the same R analysis (`SOP_R_Analysis.md`).
 

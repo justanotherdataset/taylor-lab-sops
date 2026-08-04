@@ -918,25 +918,31 @@ Record additionally, as you go: which samples yielded no MAGs and why, the GTDB 
 
 ## **Appendix A: Submission Chain**
 
-Run from `$WORK`. Each job waits on the one it depends on, so you can submit the pipeline at once and let SLURM sequence it. This assumes per-sample assembly with MEGAHIT; swap `04a` for `04b`/`04c` if you chose otherwise.
+Run from `$WORK`. Two steps are interactive (the Section 5 min1500 filter, the Section 8 bin collection) and one array range is only known once dRep has run (`NMAG` from `mags_derep.txt`), so the chain **cannot** be submitted all at once — submit it in three phases, running the interactive step between each. This assumes per-sample assembly with MEGAHIT; swap `04a` for `04b`/`04c` if you chose otherwise.
 
 ```bash
-cd "$WORK"; NSAMP=$(wc -l < samples.txt)
+cd "$WORK"; NSAMP=$(grep -c . samples.txt)
 
+# ── Phase 1 — assemble + QC, then STOP and run the Section 5 min1500 filter ──
 ASM=$(sbatch --parsable --array=1-${NSAMP}%4 scripts/04a.assemble_megahit.sl)
 QC=$(sbatch  --parsable --dependency=afterok:$ASM --array=1-${NSAMP} scripts/05.metaquast.sl)
-# Filter to min1500 interactively (Section 5) after assembly, before mapping.
-MAP=$(sbatch  --parsable --dependency=afterok:$ASM --array=1-${NSAMP}%8 scripts/06.map_coverage.sl)
+
+# → wait for $ASM to finish, run the Section 5 filter (interactive), THEN:
+# ── Phase 2 — map + bin + refine, then STOP and run the Section 8 bin collection ──
+MAP=$(sbatch  --parsable --array=1-${NSAMP}%8 scripts/06.map_coverage.sl)
 BIN=$(sbatch  --parsable --dependency=afterok:$MAP --array=1-${NSAMP}%6 scripts/07.bin.sl)
 DAS=$(sbatch  --parsable --dependency=afterok:$BIN --array=1-${NSAMP}%6 scripts/08.dastool.sl)
-# Collect bins into mags/ (Section 8) after DAS_Tool, before CheckM2.
-CM2=$(sbatch  --parsable --dependency=afterok:$DAS scripts/09.checkm2.sl)
+
+# → wait for $DAS to finish, run the Section 8 collection (interactive), THEN:
+# ── Phase 3 — quality → dereplicate → classify; then build mags_derep.txt and annotate + quantify ──
+CM2=$(sbatch  --parsable scripts/09.checkm2.sl)
 DREP=$(sbatch --parsable --dependency=afterok:$CM2 scripts/10.drep.sl)
 GTDB=$(sbatch --parsable --dependency=afterok:$DREP scripts/11.gtdbtk.sl)
-# Build mags_derep.txt (Section 12) after dRep.
-BAK=$(sbatch  --parsable --dependency=afterok:$DREP --array=1-${NMAG}%10 scripts/12.bakta.sl)
-       sbatch --dependency=afterok:$DREP scripts/14.coverm.sl
 
+# → wait for $DREP to finish, build mags_derep.txt (Section 12), THEN:
+NMAG=$(grep -c . mags_derep.txt)
+sbatch --dependency=afterok:$GTDB --array=1-${NMAG}%10 scripts/12.bakta.sl
+sbatch scripts/14.coverm.sl
 squeue --me
 ```
 

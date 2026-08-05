@@ -632,7 +632,9 @@ If the source is gone, salvage what is intact: keep only the complete 4-line rec
 
 ### **Job OOM-killed (out of memory)**
 
-`learnErrors` and `assignTaxonomy` are the memory peaks. First check you did not change any `multithread` from `nthreads` to `TRUE`: `multithread=TRUE` grabs **every core on the node** (often 128), not the CPUs you requested, so it runs that many workers at once and OOMs a large run. If the memory need is genuine, raise `#SBATCH --mem` (200 GB is safe for a ~150–200-sample run) and resubmit. Do **not** move this to an interactive session to "watch it" — that has less memory, not more.
+`learnErrors` and `assignTaxonomy` are the memory peaks. First check you did not change any `multithread` from `nthreads` to `TRUE`: `multithread=TRUE` grabs **every core on the node** (often 128), not the CPUs you requested, so it runs that many workers at once and OOMs a large run.
+
+If the memory need is genuine, raise `#SBATCH --mem` (200 GB is safe for a ~150–200-sample run) and resubmit. Do **not** move this to an interactive session to "watch it" — that has less memory, not more.
 
 ### **dada2 not found in the batch job**
 

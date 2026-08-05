@@ -446,7 +446,7 @@ write.table(data.frame(tax_id = asv_ids, tx, check.names = FALSE),
 # the R-ready table: tax_id | species..superkingdom | sample1..sampleN
 write.table(data.frame(tax_id = asv_ids, tx, counts[asv_ids, , drop = FALSE], check.names = FALSE),
             file.path(out, "counts_dada2.tsv"), sep = "\t", quote = FALSE, row.names = FALSE)
-cat(sprintf("[%s] DONE  mode=%s  samples=%d  ASVs=%d  median_reads=%d\n",
+cat(sprintf("[%s] DONE  mode=%s  samples=%d  ASVs=%d  median_reads=%.0f\n",
             run, mode, nrow(stnc), ncol(stnc), median(rowSums(stnc))))
 ```
 

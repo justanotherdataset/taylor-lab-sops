@@ -52,7 +52,7 @@ fr   <- if (td > 0) tm / td else 0
 if (fr >= 0.20) { st <- makeSequenceTable(mg); mode <- "merged" } else { st <- makeSequenceTable(ddF); mode <- "R1only" }
 stnc <- removeBimeraDenovo(st, method = "consensus", multithread = nthreads)
 taxa <- addSpecies(assignTaxonomy(stnc, silva, multithread = nthreads, tryRC = TRUE), silvasp)
-message(sprintf("mode=%s  ASVs=%d  merged_frac=%.2f  median_reads=%d", mode, ncol(stnc), fr, median(rowSums(stnc))))
+message(sprintf("mode=%s  ASVs=%d  merged_frac=%.2f  median_reads=%.0f", mode, ncol(stnc), fr, median(rowSums(stnc))))
 
 ## reshape to the SOP_R_Analysis.md Section 3 contract (SOP Section 5g)
 asv  <- sprintf("ASV%04d", seq_len(ncol(stnc)))

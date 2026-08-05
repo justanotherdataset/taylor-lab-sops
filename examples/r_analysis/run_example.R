@@ -562,7 +562,7 @@ step("Fig 13 publication figure", {
 # SOP, which has no core-microbiome step.
 # =============================================================================
 if (HAVE_MICROBIOME) {
-  step("Fig 14 core microbiome (supplementary)", {
+  step("core microbiome (supplementary, no figure)", {
     library(microbiome)
     ps_gen  <- tax_glom(ps_srs, taxrank = "genus", NArm = TRUE)
     taxa_names(ps_gen) <- make.unique(as.character(tax_table(ps_gen)[, "genus"]))
@@ -588,23 +588,24 @@ if (HAVE_MICROBIOME) {
     # The core_microbiome.txt summary above is kept as a supplementary output.
   })
 } else {
-  cat("\n----- Fig 14 core microbiome SKIPPED: microbiome not installed -----\n")
+  cat("\n----- core microbiome SKIPPED: microbiome not installed -----\n")
 }
 
 # =============================================================================
-# SUPPLEMENTARY - SPIEC-EASI co-occurrence network (NOT a SOP_R_Analysis.md step)
+# SOP Section 12 - SPIEC-EASI co-occurrence network
 # -----------------------------------------------------------------------------
-# The SOP names SPIEC-EASI in Section 10 as the compositionally correct way to
-# infer taxon-taxon associations (vs Pearson/Spearman on proportions) but does
-# not demonstrate it. This extra shows a worked network on the most prevalent
-# genera. Illustrative only: n = 20 samples is modest for network inference, and
-# because samples span three very different environments, many associations
-# partly reflect shared habitat rather than direct ecological interaction.
+# SOP_R_Analysis.md Section 12 presents SPIEC-EASI as the compositionally correct
+# way to infer taxon-taxon associations (vs Pearson/Spearman on proportions) and
+# embeds this figure (figures/14_spieceasi_network.png) as its expected output.
+# Worked network on the most prevalent genera. Illustrative: n = 20 samples is
+# modest for network inference, and because samples span three very different
+# environments, many associations partly reflect shared habitat rather than
+# direct ecological interaction.
 # =============================================================================
 if (requireNamespace("SpiecEasi", quietly = TRUE) &&
     requireNamespace("igraph", quietly = TRUE) &&
     requireNamespace("ggraph", quietly = TRUE)) {
-  step("Fig 15 SPIEC-EASI network (supplementary)", {
+  step("Fig 14 SPIEC-EASI network", {
     library(SpiecEasi); library(igraph); library(ggraph); library(tidygraph)
     set.seed(42)
     # genus level; keep the most prevalent genera for a tractable, readable network
@@ -666,14 +667,14 @@ if (requireNamespace("SpiecEasi", quietly = TRUE) &&
       scale_edge_colour_manual(values = c(positive = "#0072B2", negative = "#D55E00")) +
       scale_fill_manual(values = ncol, drop = FALSE) +
       scale_size(range = c(2, 7)) +
-      labs(title = "SPIEC-EASI co-occurrence network (supplementary; not a SOP step)",
+      labs(title = "SPIEC-EASI co-occurrence network (Section 12) — GlobalPatterns worked example",
            subtitle = "top prevalent genera; n=20 across 3 environments — illustrative, associations partly reflect habitat",
            fill = "Phylum", edge_colour = "Association", size = "Degree") +
       theme_void() + theme(legend.position = "right")
     save_gg(p_net, "14_spieceasi_network", w = 11, h = 8)
   })
 } else {
-  cat("\n----- Fig 15 SPIEC-EASI SKIPPED: SpiecEasi/igraph/ggraph not all installed -----\n")
+  cat("\n----- Fig 14 SPIEC-EASI SKIPPED: SpiecEasi/igraph/ggraph not all installed -----\n")
 }
 
 writeLines(capture.output(sessionInfo()), file.path(script_dir, "sessionInfo.txt"))

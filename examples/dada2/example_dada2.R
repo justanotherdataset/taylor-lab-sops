@@ -55,7 +55,9 @@ taxa <- addSpecies(assignTaxonomy(stnc, silva, multithread = nthreads, tryRC = T
 message(sprintf("mode=%s  ASVs=%d  merged_frac=%.2f  median_reads=%d", mode, ncol(stnc), fr, median(rowSums(stnc))))
 
 ## reshape to the SOP_R_Analysis.md Section 3 contract (SOP Section 5g)
-asv <- sprintf("ASV%04d", seq_len(ncol(stnc)))
+asv  <- sprintf("ASV%04d", seq_len(ncol(stnc)))
+seqs <- colnames(stnc)
+writeLines(paste0(">", asv, "\n", seqs), file.path(exdir, "asv.fasta"))   # for the optional UniFrac tree
 cnt <- t(stnc); rownames(cnt) <- asv; colnames(cnt) <- sn
 tx  <- as.data.frame(taxa)[, c("Kingdom","Phylum","Class","Order","Family","Genus","Species")]
 colnames(tx) <- c("superkingdom","phylum","class","order","family","genus","species")

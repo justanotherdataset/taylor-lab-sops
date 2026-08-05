@@ -65,14 +65,25 @@ echo "private key : $PRIV/key.tsv"
 module purge; module load R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0
 Rscript "$SELF_DIR/select_subset.R" "$RAW" "$META_XLSX" "$PER_CELL" "$PRIV/key.tsv" "$EXDIR/metadata.tsv"
 
-# --- 2. de-identify: symlink the subset under generic labels (no raw reads copied/committed) ---
+# --- 2. de-identify + repair -------------------------------------------------
+#   Rename the subset to generic labels AND repair truncated gzips: some raw
+#   FASTQs in this cohort are incomplete (interrupted copies), and R1/R2 truncate
+#   at different points. We salvage complete 4-line records from each, then trim
+#   R1/R2 to equal length -- Illumina keeps mates in the same order, so the first
+#   K records of each file are paired. (Verify raw integrity with `gzip -t`.)
 rm -f "$WORKDIR"/raw_deid/*.fastq.gz
+sal() { { zcat "$1" 2>/dev/null || true; } | awk 'NR%4==1{r=$0"\n";next}{r=r$0"\n"} NR%4==0{printf "%s",r}'; }
 tail -n +2 "$PRIV/key.tsv" | while IFS=$'\t' read -r label prefix core eth gen; do
     r1=$(ls "$RAW/${prefix}_"*"_R1_001.fastq.gz" 2>/dev/null | head -1)
     r2=$(ls "$RAW/${prefix}_"*"_R2_001.fastq.gz" 2>/dev/null | head -1)
     if [ -z "$r1" ] || [ -z "$r2" ]; then echo "WARN: reads missing for $label"; continue; fi
-    ln -sf "$(realpath "$r1")" "$WORKDIR/raw_deid/${label}_R1_001.fastq.gz"
-    ln -sf "$(realpath "$r2")" "$WORKDIR/raw_deid/${label}_R2_001.fastq.gz"
+    o1="$WORKDIR/raw_deid/${label}_R1_001.fastq.gz"; o2="$WORKDIR/raw_deid/${label}_R2_001.fastq.gz"
+    sal "$r1" | gzip -c > "$o1"; sal "$r2" | gzip -c > "$o2"
+    k1=$(( $(zcat "$o1" | wc -l) / 4 )); k2=$(( $(zcat "$o2" | wc -l) / 4 )); K=$(( k1 < k2 ? k1 : k2 ))
+    if [ "$k1" -ne "$k2" ]; then
+        zcat "$o1" | awk -v n=$((K*4)) 'NR<=n' | gzip -c > "$o1.t" && mv "$o1.t" "$o1"
+        zcat "$o2" | awk -v n=$((K*4)) 'NR<=n' | gzip -c > "$o2.t" && mv "$o2.t" "$o2"
+    fi
 done
 echo "de-identified samples: $(ls "$WORKDIR"/raw_deid/*_R1_001.fastq.gz | wc -l)"
 

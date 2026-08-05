@@ -72,7 +72,12 @@ Rscript "$SELF_DIR/select_subset.R" "$RAW" "$META_XLSX" "$PER_CELL" "$PRIV/key.t
 #   R1/R2 to equal length -- Illumina keeps mates in the same order, so the first
 #   K records of each file are paired. (Verify raw integrity with `gzip -t`.)
 rm -f "$WORKDIR"/raw_deid/*.fastq.gz
-sal() { { zcat "$1" 2>/dev/null || true; } | awk 'NR%4==1{r=$0"\n";next}{r=r$0"\n"} NR%4==0{printf "%s",r}'; }
+# salvage: emit only well-formed records -- header '@', plus-line '+', and
+# len(seq)==len(qual). This drops the truncated final record (whose quality line
+# is cut short by the gzip truncation) as well as any malformed record.
+sal() { { zcat "$1" 2>/dev/null || true; } | awk '
+    NR%4==1{h=$0;next} NR%4==2{s=$0;next} NR%4==3{p=$0;next}
+    NR%4==0{q=$0; if(substr(h,1,1)=="@" && substr(p,1,1)=="+" && length(s)==length(q)) printf "%s\n%s\n%s\n%s\n",h,s,p,q}'; }
 tail -n +2 "$PRIV/key.tsv" | while IFS=$'\t' read -r label prefix core eth gen; do
     r1=$(ls "$RAW/${prefix}_"*"_R1_001.fastq.gz" 2>/dev/null | head -1)
     r2=$(ls "$RAW/${prefix}_"*"_R2_001.fastq.gz" 2>/dev/null | head -1)

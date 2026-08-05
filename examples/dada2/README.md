@@ -55,6 +55,17 @@ metadata `ID` by its numeric core (strip the 2-letter prefix → `41273` → mat
 remaining 157 match cleanly. `select_subset.R` keeps only the clean, non-control
 matches.
 
+**Raw-read integrity / repair.** Some of the cohort's raw FASTQs are **truncated
+gzip streams** (interrupted copies): `gzip -t` fails, and cutadapt/DADA2 abort
+with *"Compressed file ended before the end-of-stream marker was reached."* R1 and
+R2 truncate at different points, so they also fall out of sync.
+
+`run_example.sh` repairs each sample before use: it salvages the complete 4-line
+records from each mate, re-compresses to a valid gzip, and trims R1/R2 to equal
+length (Illumina keeps mates in cluster order, so the first *K* records are
+paired). This cannot recover reads lost past the truncation — the durable fix is
+to re-copy the raw files from source (`gzip -t *.fastq.gz` finds them).
+
 ## What was run (mirroring the SOP)
 
 ```

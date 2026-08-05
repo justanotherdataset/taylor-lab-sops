@@ -617,6 +617,18 @@ If it does, re-run cutadapt before re-running Section 5.
 
 Either the reads were already primer-trimmed (use the fallback in Section 3), or the primer sequence or orientation is wrong. Check a raw read for the primer before deciding.
 
+### **cutadapt or DADA2 aborts: "Compressed file ended before the end-of-stream marker"**
+
+A raw FASTQ is a **truncated gzip** — an interrupted download or copy left the file incomplete. Find the affected files:
+
+```bash
+for f in raw/*.fastq.gz; do gzip -t "$f" 2>/dev/null || echo "TRUNCATED: $f"; done
+```
+
+R1 and R2 can truncate at different points, so they also fall **out of sync** (unequal read counts), which breaks pairing at `filterAndTrim`. **The clean fix is to re-copy the affected files from source.**
+
+If the source is gone, salvage what is intact: keep only the complete 4-line records from each file, then trim R1 and R2 to the same read count — Illumina writes mates in order, so the first *K* records stay paired. `examples/dada2/run_example.sh` does exactly this; the lost tail reads cannot be recovered.
+
 ### **Job OOM-killed (out of memory)**
 
 `learnErrors` is the peak. Raise `#SBATCH --mem` (try 180 GB) and resubmit. Do **not** move this to an interactive session to "watch it" — that has less memory, not more.

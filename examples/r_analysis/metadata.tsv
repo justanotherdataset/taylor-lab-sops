@@ -1,0 +1,24 @@
+SampleID	Environment	OriginalSampleType	SampleType
+AQC1cm	Freshwater	Freshwater (creek)	sample
+AQC4cm	Freshwater	Freshwater (creek)	sample
+AQC7cm	Freshwater	Freshwater (creek)	sample
+Even1	Mock	Mock	blank
+Even2	Mock	Mock	blank
+Even3	Mock	Mock	blank
+F21Plmr	Human	Skin	sample
+LMEpi24M	Freshwater	Freshwater	sample
+M11Fcsw	Human	Feces	sample
+M11Plmr	Human	Skin	sample
+M11Tong	Human	Tongue	sample
+M31Fcsw	Human	Feces	sample
+M31Plmr	Human	Skin	sample
+M31Tong	Human	Tongue	sample
+NP2	Saline	Ocean	sample
+NP3	Saline	Ocean	sample
+NP5	Saline	Ocean	sample
+SLEpi20M	Freshwater	Freshwater	sample
+TRRsed1	Saline	Sediment (estuary)	sample
+TRRsed2	Saline	Sediment (estuary)	sample
+TRRsed3	Saline	Sediment (estuary)	sample
+TS28	Human	Feces	sample
+TS29	Human	Feces	sample

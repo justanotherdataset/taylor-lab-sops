@@ -21,8 +21,9 @@
 #     figures/*.png, metadata.tsv, counts_dada2.tsv, track.tsv -- all keyed to
 #     generic Sample### labels. No raw reads, dates, or clinical fields are ever
 #     committed.
-#   * The label <-> participant key is written to a PRIVATE scratch path
-#     ($WORKDIR/private) and is never written into the repository.
+#   * The label <-> participant key is written to a PRIVATE, backed-up path on
+#     PROJECT ($PRIV, default /nesi/project/uoa03769/dada2_example_private),
+#     OUTSIDE the repo. Treat it like the clinical sheet; never commit it.
 #   * k-anonymity is enforced by select_subset.R (>=3 samples per published
 #     Ethnicity x Gender cell). Only Ethnicity and Gender are published.
 #   * Publish only on the lab's confirmation that ethics/consent covers public
@@ -45,15 +46,18 @@ THREADS="${SLURM_CPUS_PER_TASK:-6}"
 FWD=CCTACGGGNGGCWGCAG              # 341F
 REV=GACTACHVGGGTATCTAATCC          # 785R
 
-# where the committed outputs land (this directory), and where scratch lives
-if [ -n "${SLURM_SUBMIT_DIR:-}" ]; then EXDIR="$SLURM_SUBMIT_DIR"
-else EXDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; fi
+# where the committed outputs land (this directory)
+EXDIR="${EXDIR:-${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}}"
 FIGDIR="$EXDIR/figures"; mkdir -p "$FIGDIR"
-WORKDIR="${WORKDIR:-/nesi/nobackup/uoa03769/dada2_example}"   # scratch; NEVER the repo
-PRIV="$WORKDIR/private"                                        # key lives here; NEVER committed
+# scratch for reads/intermediates (nobackup); NEVER the repo
+WORKDIR="${WORKDIR:-/nesi/nobackup/uoa03769/dada2_example}"
+# the re-identification key lives on PROJECT (backed up, access-controlled),
+# OUTSIDE the repo; treat it like the clinical sheet and never commit it.
+PRIV="${PRIV:-/nesi/project/uoa03769/dada2_example_private}"
 mkdir -p "$WORKDIR"/{raw_deid,trimmed,asv,ref,logs} "$PRIV"
 echo "example dir : $EXDIR"
 echo "scratch     : $WORKDIR"
+echo "private key : $PRIV/key.tsv"
 
 # --- 1. select the de-identified, k-anonymous set (writes PRIVATE key + PUBLIC metadata) ---
 module purge; module load R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0

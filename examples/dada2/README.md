@@ -26,7 +26,7 @@ already-public shotgun metagenome).
 | Rule | How it is enforced |
 | --- | --- |
 | **No raw reads committed** | Reads stay in the access-controlled lab project directory; `run_example.sh` reads them there and commits only figures + tables. |
-| **Generic labels only** | Samples are renamed `Sample001`, `Sample002`, … The `label ↔ participant` key is written to a **private** scratch path (`$WORKDIR/private/key.tsv`) and is never committed. |
+| **Generic labels only** | Samples are renamed `Sample001`, `Sample002`, … The `label ↔ participant` key is written to a **private, backed-up path on project** (`/nesi/project/uoa03769/dada2_example_private/key.tsv`), outside the repo, and is never committed — treat it like the clinical sheet. |
 | **Only two columns published** | `metadata.tsv` carries `Ethnicity`, `Gender`, `SampleType` — nothing else. No participant IDs, dates, or any other clinical field. |
 | **k-anonymity** | `select_subset.R` refuses to publish any `Ethnicity × Gender` cell with fewer than 3 samples; rare ethnicity labels are collapsed into a broad label. |
 

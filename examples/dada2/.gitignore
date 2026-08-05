@@ -1,0 +1,7 @@
+# Defense in depth: never commit the re-identification key or any raw reads.
+# The key lives on /nesi/project (backed up, access-controlled), outside the repo;
+# these patterns catch any stray copy that lands in this directory.
+private/
+key*.tsv
+*.fastq
+*.fastq.gz

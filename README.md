@@ -12,7 +12,7 @@ Standard operating procedures for microbial community analysis on [NeSI](https:/
 | --- | --- | --- |
 | Full-length 16S rRNA amplicons, Oxford Nanopore (27F–1492R) | `SOP_EMU_NeSI.md` | `SOP_R_Analysis.md` |
 | The same data, where you also need consensus sequences, a tree, or resolution for taxa the reference databases miss | `SOP_EMU_NeSI.md` first, then `SOP_CONCOMPRA_NeSI.md` | `SOP_R_Analysis.md` |
-| Short-read 16S amplicons, Illumina (V3–V4, 341F–785R) | Not yet covered — you need a DADA2 or similar ASV workflow | `SOP_R_Analysis.md` applies once you have a count table |
+| Short-read 16S amplicons, Illumina (V3–V4, 341F–785R) | `SOP_DADA2_NeSI.md` | `SOP_R_Analysis.md` |
 | Shotgun metagenomes, read-based profiling, human-associated samples | `SOP_READBASED_NeSI.md` | `SOP_R_Analysis.md`, with the read-based deltas in `SOP_READBASED_NeSI.md` Section 13 |
 | Shotgun metagenomes, read-based profiling, animal or environmental samples | Not covered — MetaPhlAn's marker genes are built for human-associated taxa | — |
 | Shotgun metagenomes, assembly and binning into MAGs | `SOP_READBASED_NeSI.md` Sections 1–8 for clean reads, then `SOP_ASSEMBLY_NeSI.md` | `SOP_R_Analysis.md`, with the deltas in `SOP_ASSEMBLY_NeSI.md` Section 15 |
@@ -28,12 +28,13 @@ Standard operating procedures for microbial community analysis on [NeSI](https:/
 | [`SOP_EMU_NeSI.md`](SOP_EMU_NeSI.md) | **Upstream (Nanopore 16S) — sequencing → count tables.** Nanopore full-length 16S: NeSI onboarding (bash, modules, SLURM), read QC, filtering, Emu profiling against SILVA and RDP, combined count tables. The only document that teaches the cluster itself, starting from `pwd`. |
 | [`SOP_R_Analysis.md`](SOP_R_Analysis.md) | **Downstream (all pipelines) — count tables → results.** phyloseq, decontam, SRS normalisation, alpha/beta diversity, PERMANOVA, differential abundance (ANCOM-BC2 and MaAsLin2, ALDEx2 noted), indicator species, common pitfalls. Platform-agnostic; runs locally in R. |
 | [`SOP_CONCOMPRA_NeSI.md`](SOP_CONCOMPRA_NeSI.md) | **Runs after `SOP_EMU_NeSI.md`, same Nanopore data.** Reference-free consensus OTUs alongside Emu's assignments: install, dedup, run configuration, submission, verification, then SINTAX taxonomy, MAFFT alignment, FastTree phylogeny. Takes the Emu pipeline's filtered reads as input and hands off to the R analysis. |
+| [`SOP_DADA2_NeSI.md`](SOP_DADA2_NeSI.md) | **Upstream (Illumina short-read 16S) — sequencing → count tables.** Paired-end V3–V4 (341F/785R): primer removal (cutadapt), DADA2 denoising to amplicon sequence variants (ASVs), read merging with a forward-reads-only fallback for short reads, chimera removal, SILVA 138.1 taxonomy, and the read-tracking QC table. Single-run workflow; hands off an ASV count table to the R analysis. Does not re-teach the cluster — it points first-timers back to `SOP_EMU_NeSI.md` Sections 1–2. |
 | [`SOP_READBASED_NeSI.md`](SOP_READBASED_NeSI.md) | **Illumina shotgun, read-based.** Governance and controls, trimming and PhiX removal, host depletion against T2T-CHM13, depth gates, taxonomy (MetaPhlAn 4), function (HUMAnN), contamination screening, and what changes in the R analysis for compositional input. Does not re-teach the cluster — it points first-timers back to `SOP_EMU_NeSI.md` Section 1. |
 | [`SOP_ASSEMBLY_NeSI.md`](SOP_ASSEMBLY_NeSI.md) | **Illumina shotgun, assembly-based.** Takes the read-based SOP's clean, host-depleted reads and reconstructs genomes: assembly (MEGAHIT/metaSPAdes), coverage mapping, binning (MetaBAT2, MaxBin2, CONCOCT) with DAS_Tool refinement, MAG quality (CheckM2, MIMAG tiers), dereplication (dRep), taxonomy (GTDB-Tk), annotation (Bakta; eggNOG/DRAM optional), and a MAG × sample abundance table. Hands off to the R analysis with compositional deltas (its Section 15). |
 
 **The R analysis is platform-agnostic** — one R document, not one per platform. Once you have a count table, a taxonomy table and a metadata file, the R workflow is identical whether the reads were profiled with Emu, CONCOMPRA or MetaPhlAn; only the interpretation differs (`SOP_EMU_NeSI.md` covers this under "Full-length vs short-read"; the read-based SOP's Section 13 lists what changes when the input is relative abundance rather than counts).
 
-**Start with `SOP_EMU_NeSI.md` if this is your first pipeline** — it is the only document that teaches the cluster (bash, modules, SLURM, array jobs). The two cluster documents downstream of it (CONCOMPRA, read-based) say so at the top and point back to `SOP_EMU_NeSI.md` Section 1; the R analysis runs locally and legitimately does not.
+**Start with `SOP_EMU_NeSI.md` if this is your first pipeline** — it is the only document that teaches the cluster (bash, modules, SLURM, array jobs). The other cluster documents (CONCOMPRA, DADA2, read-based) say so at the top and point back to `SOP_EMU_NeSI.md` Sections 1–2; the R analysis runs locally and legitimately does not.
 
 ## Before you start
 
@@ -121,4 +122,6 @@ You are welcome to adapt these for your own lab: this repository is licensed **C
 
 ---
 
-*Last updated: August 2026. The five SOPs and this README were probed against NeSI Mahuika and its R installation, reviewed adversarially through dedicated correctness and tutorial rounds, and rewritten against the findings; `SOP_ASSEMBLY_NeSI.md` (v1.0) was brought to the same standard through its own correctness and tutorial review, and a whole-suite capstone review followed in August 2026. The specification, review prompts, and full review records are kept with the lab's internal materials.*
+*Last updated: August 2026. The five reviewed SOPs and this README were probed against NeSI Mahuika and its R installation, reviewed adversarially through dedicated correctness and tutorial rounds, and rewritten against the findings; `SOP_ASSEMBLY_NeSI.md` (v1.0) was brought to the same standard, and a whole-suite capstone review followed in August 2026. The specification, review prompts, and full review records are kept with the lab's internal materials.*
+
+*`SOP_DADA2_NeSI.md` (v1.0) is the sixth SOP, newly added for Illumina short-read 16S (V3–V4); it awaits its own correctness and tutorial review before promotion.*

@@ -4,7 +4,9 @@
 
 *The shared downstream analysis for this suite: whichever upstream SOP produced your count table (Emu, CONCOMPRA, read-based shotgun, or assembly), the analysis continues here.*
 
-**v2.1** | last updated July 2026 | runs locally in R, not on NeSI | platform-agnostic | suite v1.1 (August 2026)
+**v2.2** | last updated August 2026 | runs locally in R, not on NeSI | platform-agnostic | suite v1.1 (August 2026)
+
+*Changelog — v2.2 (Aug 2026): added Section 12 (SPIEC-EASI co-occurrence networks) and the GlobalPatterns worked-example figures embedded through the document; both were correctness-reviewed in the August 2026 round ([`reviews/r_analysis_review/`](reviews/r_analysis_review/)).*
 
 **Contents:** [Quick Roadmap: What You'll Do](#quick-roadmap-what-youll-do) · [1. Understanding Your Data](#1-understanding-your-data) · [2. Install and Load Packages](#2-install-and-load-packages) · [3. Load and Prepare Your Data](#3-load-and-prepare-your-data) · [4. Remove Contaminants and Build ps_raw](#4-remove-contaminants-and-build-ps_raw) · [5. Explore Your Data Before Analysis](#5-explore-your-data-before-analysis) · [6. Normalise to ps_srs](#6-normalise-to-ps_srs) · [7. Alpha Diversity](#7-alpha-diversity) · [8. Beta Diversity](#8-beta-diversity) · [9. Taxonomy Barplots](#9-taxonomy-barplots) · [10. Differential Abundance](#10-differential-abundance) · [11. Indicator Species](#11-indicator-species) · [12. Co-occurrence Networks (optional)](#12-co-occurrence-networks-optional) · [13. Figures and Reproducibility](#13-figures-and-reproducibility) · [Troubleshooting and Common Pitfalls](#troubleshooting-and-common-pitfalls) · [Appendices](#appendices)
 

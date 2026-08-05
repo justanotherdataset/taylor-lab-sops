@@ -46,8 +46,10 @@ THREADS="${SLURM_CPUS_PER_TASK:-6}"
 FWD=CCTACGGGNGGCWGCAG              # 341F
 REV=GACTACHVGGGTATCTAATCC          # 785R
 
-# where the committed outputs land (this directory)
-EXDIR="${EXDIR:-${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}}"
+# SELF_DIR = where the helper scripts live; EXDIR = where committed outputs land
+# (defaults to SELF_DIR; override EXDIR to send outputs elsewhere, e.g. a test dir)
+SELF_DIR="${SELF_DIR:-${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}}"
+EXDIR="${EXDIR:-$SELF_DIR}"
 FIGDIR="$EXDIR/figures"; mkdir -p "$FIGDIR"
 # scratch for reads/intermediates (nobackup); NEVER the repo
 WORKDIR="${WORKDIR:-/nesi/nobackup/uoa03769/dada2_example}"
@@ -61,7 +63,7 @@ echo "private key : $PRIV/key.tsv"
 
 # --- 1. select the de-identified, k-anonymous set (writes PRIVATE key + PUBLIC metadata) ---
 module purge; module load R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0
-Rscript "$EXDIR/select_subset.R" "$RAW" "$META_XLSX" "$PER_CELL" "$PRIV/key.tsv" "$EXDIR/metadata.tsv"
+Rscript "$SELF_DIR/select_subset.R" "$RAW" "$META_XLSX" "$PER_CELL" "$PRIV/key.tsv" "$EXDIR/metadata.tsv"
 
 # --- 2. de-identify: symlink the subset under generic labels (no raw reads copied/committed) ---
 rm -f "$WORKDIR"/raw_deid/*.fastq.gz
@@ -90,7 +92,7 @@ REF="$WORKDIR/ref"
 
 # --- 5. DADA2 + the three illustrative figures (SOP Sections 4-6) -------------
 module purge; module load R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0
-Rscript "$EXDIR/example_dada2.R" "$WORKDIR/trimmed" "$WORKDIR/asv" "$REF" \
+Rscript "$SELF_DIR/example_dada2.R" "$WORKDIR/trimmed" "$WORKDIR/asv" "$REF" \
         "$TRUNC_F" "$TRUNC_R" "$THREADS" "$FIGDIR" "$EXDIR/metadata.tsv" "$EXDIR"
 
 echo "Done. Committed-example outputs (de-identified):"

@@ -677,3 +677,52 @@ NeSI Mahuika documentation: https://docs.nesi.org.nz
 ### **Appendix C: Provenance**
 
 The module strings (`R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0`, `cutadapt/5.2-foss-2023a-Python-3.11.6`) and the SILVA 138.1 Zenodo URLs in this document were confirmed present on NeSI Mahuika in August 2026. The pipeline is distilled from the Taylor Lab's working short-read 16S workflow; the single-run path here deliberately omits its cross-run merge and meta-analysis machinery (see the scope note at the top). Confirm module strings with `module spider` before relying on them — they drift.
+
+### **Appendix D: Phylogenetic Tree for UniFrac (optional)**
+
+`SOP_R_Analysis.md` uses Bray-Curtis, Aitchison and Jaccard distances, none of which need a tree — so this step is optional. **UniFrac and Faith's phylogenetic diversity do need a tree** of your ASVs, which measures how *related* the taxa are, not just which differ.
+
+Because ASVs are exact sequences, you can build one from the `<run>_asv.fasta` that Section 5 writes: align the sequences (**MAFFT**), then infer a tree (**FastTree**) — the same tooling `SOP_CONCOMPRA_NeSI.md` uses. Save as `06_asv_tree.sh`:
+
+```bash
+#!/bin/bash
+#SBATCH --account <your_nesi_project_code>
+#SBATCH --job-name asv_tree_<your_project>
+#SBATCH --chdir /nesi/nobackup/<your_nesi_project_code>/<your_project>
+#SBATCH --time 02:00:00
+#SBATCH --mem 16G
+#SBATCH --cpus-per-task 8
+#SBATCH --output logs/%x_%j.out
+#SBATCH --error logs/%x_%j.err
+
+set -euo pipefail
+
+module purge
+module load MAFFT/7.505-gimkl-2022a-with-extensions
+module load FastTree/2.1.11-GCC-11.3.0
+
+RUN=tofi_v3v4
+ASV=asv/$RUN/${RUN}_asv.fasta
+mafft --auto --thread "$SLURM_CPUS_PER_TASK" "$ASV" > "asv/$RUN/${RUN}_asv_aligned.fasta"
+FastTree -gtr -nt "asv/$RUN/${RUN}_asv_aligned.fasta" > "asv/$RUN/${RUN}_asv.nwk"
+```
+
+Submit with `sbatch 06_asv_tree.sh`. **How long:** a few minutes to about an hour, depending on ASV count.
+
+**Checkpoint.**
+
+```bash
+grep -c "^>" asv/$RUN/${RUN}_asv_aligned.fasta   # aligned ASVs
+wc -l asv/$RUN/${RUN}_asv.nwk                     # one line (Newick)
+```
+
+> **Expect** the aligned FASTA to hold the same number of sequences as your ASV table, and a one-line Newick tree. An **empty** tree usually means MAFFT received an empty FASTA — confirm Section 5 wrote `<run>_asv.fasta`.
+
+Then attach the tree in R, and UniFrac / Faith's PD become available. The tree tips are the ASV IDs (`ASV0001`…), which match the `tax_id` column of `counts_dada2.tsv`, so they line up with the phyloseq object built from that table:
+
+```r
+library(phyloseq); library(ape)
+tree <- ape::read.tree("tofi_v3v4_asv.nwk")   # FastTree output is unrooted
+ps   <- merge_phyloseq(ps, phy_tree(tree))    # add to your existing phyloseq object
+UniFrac(ps, weighted = TRUE)                  # weighted = FALSE for unweighted UniFrac
+```

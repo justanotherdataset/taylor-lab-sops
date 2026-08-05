@@ -97,6 +97,11 @@ per sample). With `metadata.tsv` it drops straight into that document — and in
 `examples/r_analysis/` — to test community differences by Ethnicity, Gender and
 their interaction (PERMANOVA, diversity, differential abundance).
 
+For **UniFrac / Faith's PD**, `asv.fasta` holds the ASV sequences; `asv_tree.nwk`
+is a phylogenetic tree built from them (MAFFT + FastTree, the SOP's optional
+Appendix D). Its tips are the `tax_id` values, so it attaches to the phyloseq
+object directly.
+
 ## Files
 
 | File | What it is |
@@ -106,5 +111,7 @@ their interaction (PERMANOVA, diversity, differential abundance).
 | `example_dada2.R` | The DADA2 run and the three figures (mirrors SOP Sections 3–6). |
 | `metadata.tsv` | De-identified metadata (`SampleID`, `Ethnicity`, `Gender`, `SampleType`). |
 | `counts_dada2.tsv` | De-identified ASV count table in the R-analysis contract. |
+| `asv.fasta` | ASV sequences (`ASV0001`…), keyed to `counts_dada2.tsv`. |
+| `asv_tree.nwk` | Phylogenetic tree of the ASVs (MAFFT + FastTree) — for UniFrac / Faith's PD. |
 | `track.tsv` | Per-sample read tracking (the data behind figure 2). |
 | `figures/*.png` | The three illustrative figures embedded in the SOP. |

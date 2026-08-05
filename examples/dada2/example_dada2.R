@@ -84,7 +84,7 @@ ggsave(file.path(figdir, "02_read_tracking.png"), p2, width = 7.5, height = 4.5,
 ## FIGURE 3 -- rarefaction: ASV richness vs sequencing depth (SOP Section 6)
 meta <- tryCatch(read.delim(metaf), error = function(e) NULL)
 cols <- c(Caucasian = "#4C72B0", Chinese = "#DD8452")
-grp  <- if (!is.null(meta)) meta$Ethnicity[match(rownames(stnc), meta$SampleID)] else NULL
+grp  <- if (!is.null(meta)) meta$Ethnicity[match(sn, meta$SampleID)] else NULL   # sn aligns with stnc rows
 rcol <- if (!is.null(grp) && !all(is.na(grp))) cols[grp] else "#4C72B0"
 png(file.path(figdir, "03_asv_rarefaction.png"), width = 950, height = 680, res = 120)
 rarecurve(stnc, step = 500, col = rcol, label = FALSE,

@@ -41,7 +41,7 @@ message(sprintf("truncLen %s/%s (2%%ile cap %s/%s)", tF, tR, capF, capR))
 ## denoise (SOP Section 5a-5e)
 flt <- filterAndTrim(fnF, filtF, fnR, filtR, truncLen = c(tF, tR),
                      maxEE = c(2, 2), truncQ = 2, maxN = 0, rm.phix = TRUE,
-                     compress = TRUE, multithread = TRUE)
+                     compress = TRUE, multithread = nthreads)
 keep <- file.exists(filtF); filtF <- filtF[keep]; filtR <- filtR[keep]; sn <- sn[keep]
 errF <- learnErrors(filtF, multithread = nthreads); errR <- learnErrors(filtR, multithread = nthreads)
 ddF  <- dada(filtF, err = errF, multithread = nthreads); ddR <- dada(filtR, err = errR, multithread = nthreads)

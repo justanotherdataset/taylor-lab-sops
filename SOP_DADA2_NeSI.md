@@ -383,10 +383,11 @@ tF <- if (tF > 0) min(tF, capF) else capF
 tR <- if (tR > 0) min(tR, capR) else capR
 message(sprintf("[%s] truncLen used %s/%s (read 2%%ile cap %s/%s)", run, tF, tR, capF, capR))
 
-# 5a. quality filter + truncation
+# 5a. quality filter + truncation. multithread = nthreads (the job's CPU count),
+# NOT TRUE: on a shared node TRUE grabs every core and can OOM a many-sample run.
 flt <- filterAndTrim(fnF, filtF, fnR, filtR, truncLen = c(tF, tR),
                      maxEE = c(2, 2), truncQ = 2, maxN = 0, rm.phix = TRUE,
-                     compress = TRUE, multithread = TRUE)
+                     compress = TRUE, multithread = nthreads)
 keep  <- file.exists(filtF)                    # drop samples with 0 reads passing
 filtF <- filtF[keep]; filtR <- filtR[keep]; sn <- sn[keep]
 if (length(filtF) == 0)
@@ -631,7 +632,7 @@ If the source is gone, salvage what is intact: keep only the complete 4-line rec
 
 ### **Job OOM-killed (out of memory)**
 
-`learnErrors` is the peak. Raise `#SBATCH --mem` (try 180 GB) and resubmit. Do **not** move this to an interactive session to "watch it" — that has less memory, not more.
+`learnErrors` and `assignTaxonomy` are the memory peaks. First check you did not change any `multithread` from `nthreads` to `TRUE`: `multithread=TRUE` grabs **every core on the node** (often 128), not the CPUs you requested, so it runs that many workers at once and OOMs a large run. If the memory need is genuine, raise `#SBATCH --mem` (200 GB is safe for a ~150–200-sample run) and resubmit. Do **not** move this to an interactive session to "watch it" — that has less memory, not more.
 
 ### **dada2 not found in the batch job**
 

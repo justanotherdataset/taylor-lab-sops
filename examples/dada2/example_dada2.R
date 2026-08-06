@@ -45,7 +45,9 @@ flt <- filterAndTrim(fnF, filtF, fnR, filtR, truncLen = c(tF, tR),
 keep <- file.exists(filtF); filtF <- filtF[keep]; filtR <- filtR[keep]; sn <- sn[keep]
 errF <- learnErrors(filtF, multithread = nthreads); errR <- learnErrors(filtR, multithread = nthreads)
 ddF  <- dada(filtF, err = errF, multithread = nthreads); ddR <- dada(filtR, err = errR, multithread = nthreads)
+if (length(filtF) == 1L) { ddF <- setNames(list(ddF), sn); ddR <- setNames(list(ddR), sn) }  # 1-sample safety
 mg   <- mergePairs(ddF, filtF, ddR, filtR)
+if (length(filtF) == 1L && is.data.frame(mg)) mg <- setNames(list(mg), sn)
 tm   <- sum(unlist(lapply(mg, function(x) sum(x$abundance))), na.rm = TRUE)
 td   <- sum(sapply(ddF, function(x) sum(getUniques(x))), na.rm = TRUE)
 fr   <- if (td > 0) tm / td else 0

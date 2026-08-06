@@ -174,7 +174,7 @@ module load R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0
 Rscript -e 'suppressMessages(library(dada2)); cat("dada2", as.character(packageVersion("dada2")), "OK\n")'
 ```
 
-> **Expect** both files present (~137 MB and ~79 MB) and a `dada2 <version> OK` line. A **zero-byte** SILVA file means the download failed — re-run and check the URL. An **error** instead of the `OK` line means `dada2` did not install; read the install output above it.
+> **Expect** both files present (~131 MB and ~75 MB, as `ls -lh` prints them) and a `dada2 <version> OK` line. A **zero-byte** SILVA file means the download failed — re-run and check the URL. An **error** instead of the `OK` line means `dada2` did not install; read the install output above it.
 
 ---
 
@@ -403,6 +403,9 @@ errF <- learnErrors(filtF, multithread = nthreads)
 errR <- learnErrors(filtR, multithread = nthreads)
 ddF  <- dada(filtF, err = errF, multithread = nthreads)
 ddR  <- dada(filtR, err = errR, multithread = nthreads)
+# a single surviving sample makes dada()/mergePairs() return bare objects, not
+# lists; wrap into 1-element lists so the per-sample steps below still work.
+if (length(filtF) == 1L) { ddF <- setNames(list(ddF), sn); ddR <- setNames(list(ddR), sn) }
 
 # 5d. merge pairs, with FORWARD-READS-ONLY fallback on insufficient overlap.
 # Use the merged FRACTION of denoised reads (not merged>0): a handful of
@@ -410,6 +413,7 @@ ddR  <- dada(filtR, err = errR, multithread = nthreads)
 # table over the far larger R1-only set.
 mg <- tryCatch(mergePairs(ddF, filtF, ddR, filtR, verbose = TRUE),
                error = function(e) { message("mergePairs failed: ", conditionMessage(e)); NULL })
+if (length(filtF) == 1L && is.data.frame(mg)) mg <- setNames(list(mg), sn)   # 1 sample -> bare data.frame
 total_merged <- if (!is.null(mg)) sum(unlist(lapply(mg, function(x) sum(x$abundance))), na.rm = TRUE) else 0
 total_denoF  <- sum(sapply(ddF, function(x) sum(getUniques(x))), na.rm = TRUE)
 merged_frac  <- if (total_denoF > 0) total_merged / total_denoF else 0
@@ -556,7 +560,8 @@ Also check that enough reads survive per sample. A common floor for diversity wo
 
 ```bash
 # median reads out, and the five lowest samples
-awk -F'\t' 'NR>1{print $NF"\t"$1}' asv/$RUN/${RUN}_track.tsv | sort -n | head -5
+awk -F'\t' 'NR>1{print $NF}' asv/$RUN/${RUN}_track.tsv | sort -n | awk '{a[NR]=$1} END{print "median reads out:", (NR%2? a[(NR+1)/2] : (a[NR/2]+a[NR/2+1])/2)}'
+awk -F'\t' 'NR>1{print $NF"\t"$1}' asv/$RUN/${RUN}_track.tsv | sort -n | head -5   # five lowest samples
 ```
 
 **How long.** Seconds — these are checks you read at the prompt, not jobs.
@@ -742,8 +747,13 @@ wc -l asv/$RUN/${RUN}_asv.nwk                     # one line (Newick)
 Then attach the tree in R, and UniFrac / Faith's PD become available. The tree tips are the ASV IDs (`ASV0001`…), which match the `tax_id` column of `counts_dada2.tsv`, so they line up with the phyloseq object built from that table:
 
 ```r
-library(phyloseq); library(ape)
-tree <- ape::read.tree("tofi_v3v4_asv.nwk")   # FastTree output is unrooted
+library(phyloseq); library(ape); library(phangorn)
+tree <- ape::read.tree("tofi_v3v4_asv.nwk")   # FastTree output is UNROOTED
+# UniFrac is root-dependent; phyloseq would otherwise assign a RANDOM root on
+# every call, so the distances (and any PERMANOVA p-value) change run to run.
+tree <- phangorn::midpoint(tree)              # midpoint-root once, deterministically
 ps   <- merge_phyloseq(ps, phy_tree(tree))    # add to your existing phyloseq object
 UniFrac(ps, weighted = TRUE)                  # weighted = FALSE for unweighted UniFrac
 ```
+
+**Root the tree before you use it.** FastTree returns an unrooted tree, and UniFrac depends on where the root sits. Hand phyloseq an unrooted tree and it picks a root at random each time (you may see `Randomly assigning root as -- ASV… --`), so your distances are not reproducible. `phangorn::midpoint()` roots it once, the same way every run — the same package `SOP_CONCOMPRA_NeSI.md` uses for its tree.

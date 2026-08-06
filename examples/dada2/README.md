@@ -4,8 +4,8 @@ The three illustrative figures embedded in **Sections 4–6** of the DADA2 SOP,
 produced by running the SOP's own workflow (cutadapt → quality profile → DADA2
 denoising → SILVA taxonomy) on a **de-identified** subset of the Taylor Lab
 **TOFI FU** Illumina V3–V4 16S cohort, grouped by **Ethnicity × Gender** — the
-cohort's actual study design, and the same framing as its already-public shotgun
-metagenome. Reproducible (lab members, project access) with one submission:
+cohort's actual study design. Reproducible (lab members, project access) with one
+submission:
 
 ```bash
 cd examples/dada2 && sbatch run_example.sh     # ~157 samples, full depth; a batch job
@@ -19,9 +19,10 @@ cd examples/dada2 && sbatch run_example.sh     # ~157 samples, full depth; a bat
 ## Governance — read this first
 
 This example ships from a **public** repository, so only **de-identified derived
-outputs** are committed, and only on the lab's confirmation that ethics/consent
-covers public release of a de-identified 16S dataset (established by the cohort's
-already-public shotgun metagenome).
+outputs** are committed, and only on the Taylor Lab's authorisation — as the data
+owner, under its own ethics/consent — to release this de-identified, k-anonymised
+teaching subset. The underlying cohort is **not** publicly deposited; nothing here
+lets a reader reconstruct a participant.
 
 | Rule | How it is enforced |
 | --- | --- |
@@ -44,7 +45,7 @@ the k-anonymity floor:
 | --- | --- |
 | Cohort | Taylor Lab **TOFI FU** microbiome study |
 | Assay | Illumina paired-end **2×300 bp**, 16S **V3–V4** (341F / 785R) |
-| Published basis | **⚠ Fill in before public release.** The de-identified release rests on the cohort's shotgun metagenome already being public under BioProject **`<PRJNA/PRJEB — fill in>`** (same Ethnicity/Gender framing). Until this accession is confirmed, the ethics basis is unverifiable — do not merge this example to a public release branch. |
+| Basis for release | The Taylor Lab's own data; **not** deposited in SRA/ENA or any public archive. Released here as a de-identified, k-anonymised teaching subset under the lab's authorisation as data owner (its own ethics/consent). Only derived outputs are shipped — no raw reads, no participant identifiers. |
 | Raw 16S reads | Held in the lab **project directory** (access-controlled); **not** publicly deposited. Lab members reproduce via `run_example.sh`; external readers see the committed illustrative figures. |
 | Samples used | The **157** cleanly read↔metadata-matched, non-control samples (controls and non-standard IDs excluded — see below). |
 

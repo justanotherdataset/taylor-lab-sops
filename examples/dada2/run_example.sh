@@ -26,9 +26,9 @@
 #     OUTSIDE the repo. Treat it like the clinical sheet; never commit it.
 #   * k-anonymity is enforced by select_subset.R (>=3 samples per published
 #     Ethnicity x Gender cell). Only Ethnicity and Gender are published.
-#   * Publish only on the lab's confirmation that ethics/consent covers public
-#     release of a de-identified 16S dataset -- the same basis as this cohort's
-#     already-public shotgun metagenome (same Ethnicity/Gender framing).
+#   * The Taylor Lab owns this data; it is NOT publicly deposited. Publish only
+#     on the lab's authorisation, as data owner under its own ethics/consent, to
+#     release this de-identified k-anonymised teaching subset.
 #
 # Run it (as a lab member with project access), from THIS directory:
 #     cd examples/dada2 && sbatch run_example.sh

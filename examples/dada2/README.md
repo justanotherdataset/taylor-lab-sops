@@ -93,9 +93,14 @@ Modules: `R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0` (dada2, ggplot2, vegan),
 
 `counts_dada2.tsv` is written in the exact shape `SOP_R_Analysis.md` Section 3
 loads (tab-separated: `tax_id` + `species … superkingdom` + one integer column
-per sample). With `metadata.tsv` it drops straight into that document — and into
-`examples/r_analysis/` — to test community differences by Ethnicity, Gender and
-their interaction (PERMANOVA, diversity, differential abundance).
+per sample). With `metadata.tsv` it drops straight into that document to test
+community differences by Ethnicity, Gender and their interaction (PERMANOVA,
+diversity, differential abundance).
+
+**See [`r_analysis/`](r_analysis/) for that hand-off run end-to-end on this
+example** — the DADA2 outputs taken through the `SOP_R_Analysis.md` workflow
+(SRS, alpha diversity, Bray-Curtis + weighted UniFrac PERMANOVA `~ Ethnicity *
+Gender`, genus barplot, ANCOM-BC2), with real figures and result tables.
 
 For **UniFrac / Faith's PD**, `asv.fasta` holds the ASV sequences; `asv_tree.nwk`
 is a phylogenetic tree built from them (MAFFT + FastTree, the SOP's optional

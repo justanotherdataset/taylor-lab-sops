@@ -6,7 +6,7 @@
 #
 # Usage: example_dada2.R <trimmed> <scratch_out> <ref> <truncF> <truncR> <threads> <figdir> <metadata_tsv> <example_dir>
 suppressMessages({ library(dada2); library(ShortRead); library(ggplot2)
-                   library(tidyr); library(vegan) })
+                   library(tidyr); library(vegan); library(patchwork) })
 a <- commandArgs(trailingOnly = TRUE)
 reads <- a[1]; out <- a[2]; ref <- a[3]
 tF <- as.integer(a[4]); tR <- as.integer(a[5]); nthreads <- as.integer(a[6])
@@ -22,11 +22,16 @@ sn  <- sub("_R1_001\\.fastq\\.gz$", "", basename(fnF))   # already de-identified
 filtF <- file.path(out, "filtered", paste0(sn, "_F.fq.gz"))
 filtR <- file.path(out, "filtered", paste0(sn, "_R.fq.gz"))
 
-## FIGURE 1 -- aggregate quality profile of the primer-trimmed reads (SOP Section 4)
+## FIGURE 1 -- forward and reverse quality profiles side by side (SOP Section 4).
+## Separate panels (not pooled) so the reader can see R2 degrade faster than R1 --
+## the fact that sets truncR shorter than truncF.
+nq <- min(20, length(fnF))
+qF <- plotQualityProfile(fnF[seq_len(nq)], aggregate = TRUE) + ggplot2::ggtitle("Forward reads (R1)")
+qR <- plotQualityProfile(fnR[seq_len(nq)], aggregate = TRUE) + ggplot2::ggtitle("Reverse reads (R2)")
 ggsave(file.path(figdir, "01_quality_profile.png"),
-       plotQualityProfile(c(fnF, fnR), aggregate = TRUE) +
-         ggtitle("Aggregate quality profile, primer-trimmed reads (illustrative example)"),
-       width = 8, height = 4, dpi = 120)
+       (qF | qR) + plot_annotation(
+         title = "Aggregate quality profile of primer-trimmed reads (illustrative example)"),
+       width = 11, height = 4.5, dpi = 130)
 
 ## self-tuning truncLen cap (SOP Section 4 / 5)
 sw <- function(f) { w <- integer(0)

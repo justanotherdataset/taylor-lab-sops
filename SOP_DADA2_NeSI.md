@@ -324,6 +324,12 @@ Submit with `sbatch 04_quality_profile.sh`, then open `asv/$RUN/qualityF.pdf` an
 
 The plot shows quality score (y) against read position (x). The green line is the median. **Set truncF and truncR near where the median quality falls below about Q30** — but never so low that `truncF + truncR` drops under the floor above. R2 will fall off earlier than R1; that is normal, and it is why the reverse truncation is shorter.
 
+The aggregate profile below is illustrative output from the worked example (forward and reverse reads pooled; see [`examples/dada2/README.md`](examples/dada2/README.md)) — your own curves will differ:
+
+![Aggregate quality profile of primer-trimmed V3–V4 reads](examples/dada2/figures/01_quality_profile.png)
+
+Quality stays high well past cycle 200, then tails off toward the 3' end — so `truncF=280` keeps most of the forward read while `truncR=220` trims the reverse read's faster decline, leaving ample overlap to merge.
+
 **The self-tuning cap — you cannot truncate above your read length.** A value larger than the actual read length makes `filterAndTrim` silently return **zero** reads. The Section 5 script protects you: it caps whatever you choose at the actual post-primer read length (the 2nd percentile, so a few short reads cannot drag it down). You set the *upper bound* from the plot; the script stops it exceeding the data you have.
 
 **How long.** A few minutes.
@@ -542,6 +548,12 @@ grep -c "^>" asv/$RUN/${RUN}_asv.fasta          # number of ASVs
 
 The standard DADA2 quality check is to follow reads through every step and see where they drop. `05_dada2.R` writes this as `<run>_track.tsv`: one row per sample, with columns **input → filtered → denoisedF → merged → nonchim**. A healthy run keeps most reads at every step; a cliff at one step tells you exactly what went wrong.
 
+The worked example's tracking plot (illustrative; each line is one of its 157 samples, red is the median):
+
+![Reads surviving each DADA2 step, one line per sample](examples/dada2/figures/02_read_tracking.png)
+
+Reads fall gently from input to the non-chimeric ASV table with no single cliff — the healthy shape. A steep drop at one transition localises the problem to that step (read it against the table below).
+
 ```bash
 RUN=tofi_v3v4
 column -t asv/$RUN/${RUN}_track.tsv | head -20
@@ -557,6 +569,12 @@ Read each drop against this table:
 | merged → nonchim | keep ~80–95% | <50% → leftover primer inflating chimeras; redo Section 3 |
 
 Also check that enough reads survive per sample. A common floor for diversity work is a few thousand reads per sample; the R analysis's normalisation (SRS) makes the exact cut-off there, but samples far below the rest are candidates to flag or drop now.
+
+A rarefaction curve per sample — ASVs observed as reads are subsampled (illustrative example output):
+
+![ASV richness vs sequencing depth, one curve per sample](examples/dada2/figures/03_asv_rarefaction.png)
+
+Curves that flatten mean the depth has captured most of the diversity present; curves still climbing at your sequencing depth are under-sequenced, and their richness is an undercount.
 
 ```bash
 # median reads out, and the five lowest samples

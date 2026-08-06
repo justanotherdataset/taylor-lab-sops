@@ -88,7 +88,7 @@ Modules: `R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0` (dada2, ggplot2, vegan),
 | --- | --- |
 | `figures/01_quality_profile.png` | Aggregate quality of the primer-trimmed forward and reverse reads; where quality falls off sets `truncLen` (Section 4). |
 | `figures/02_read_tracking.png` | Reads surviving each step (input → filtered → denoised → merged → nonchim), one line per sample, median in red — the Section 6 QC checkpoint. |
-| `figures/03_asv_rarefaction.png` | ASV richness against sequencing depth, coloured by Ethnicity; whether curves plateau shows if depth is sufficient. |
+| `figures/03_asv_rarefaction.png` | ASV richness against sequencing depth, one curve per sample; whether curves plateau shows if depth is sufficient (a within-sample QC check, so a single colour). |
 
 ## Hand-off to the R analysis
 

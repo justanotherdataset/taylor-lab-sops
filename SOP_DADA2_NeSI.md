@@ -68,7 +68,7 @@ This only works if the reads are long enough to reach each other. After the prim
 **2×300 bp** sequencing overlaps comfortably; **2×250 bp** is tight; **2×150 bp cannot span a V3–V4 amplicon at all**. This one fact drives most of Section 4 and Section 5, so check your read length first:
 
 ```bash
-zcat raw/<one_sample>_R1_001.fastq.gz | head -2 | tail -1 | wc -c   # ~read length + 1
+zcat raw/<sample>_R1_001.fastq.gz | head -2 | tail -1 | wc -c   # ~read length + 1
 ```
 
 ### **What an ASV is, and ASV vs OTU**
@@ -322,13 +322,15 @@ Submit with `sbatch 04_quality_profile.sh`, then open `asv/$RUN/qualityF.pdf` an
 
 ### **Read the profile and choose truncLen**
 
-`plotQualityProfile` draws quality score (y) against read position (x), aggregated over your samples; the **green line is the median**, the dashed orange lines the quartiles. You read one number off each plot — the cycle where the median starts dropping below about **Q30** — and cut just before the quality falls apart.
+`plotQualityProfile` draws quality score (y) against read position (x), aggregated over your samples. The **green line is the median**, the dashed orange lines the quartiles, and the **red line (right axis, 0–100%) is the fraction of reads reaching each cycle** — it holds near 100%, then falls where the reads themselves end, which marks read length, not a quality drop.
+
+You read one number off each plot — the cycle where the *median* dips below about **Q30** — and cut just before the quality falls apart.
 
 The worked example's forward and reverse profiles show the call (illustrative — your own curves will differ; see [`examples/dada2/README.md`](examples/dada2/README.md)):
 
 ![Forward and reverse aggregate quality profiles of primer-trimmed V3–V4 reads](examples/dada2/figures/01_quality_profile.png)
 
-Read the two panels together. The **forward reads (R1, left)** hold a median above Q30 to about cycle 280, so `truncF = 280` keeps almost the whole read. The **reverse reads (R2, right)** degrade sooner and faster — the median is sliding by cycle 200 and drops toward Q25 past 250 — so `truncR = 220` stops before that decline.
+Read the two panels together. The **forward reads (R1, left)** hold a median above Q30 to roughly cycle 260–270, so `truncF = 280` keeps almost the whole read, trading a slightly degraded tail that `maxEE` filters out. The **reverse reads (R2, right)** degrade sooner and faster — the median is sliding by cycle 200 and drops toward Q25 past 250 — so `truncR = 220` stops before that decline.
 
 That the reverse read falls off first is normal for Illumina paired-end sequencing, and it is the whole reason `truncR` is the shorter cut. The two still sum to 500 — comfortably above the ~460 bp floor — so the trimmed reads keep enough overlap to merge.
 
@@ -456,6 +458,7 @@ writeLines(mode, file.path(out, paste0(run, "_mode.txt")))
 writeLines(paste0(">", asv_ids, "\n", seqs), file.path(out, paste0(run, "_asv.fasta")))   # keep: IDs map to sequences here
 gN <- function(x) sum(getUniques(x))
 mergedN <- if (mode == "merged") sapply(mg, gN) else NA
+colnames(flt) <- c("input", "filtered")   # filterAndTrim names these reads.in/reads.out
 track <- cbind(flt[keep, , drop = FALSE], denoisedF = sapply(ddF, gN), merged = mergedN, nonchim = rowSums(stnc))
 rownames(track) <- sn
 write.table(track, file.path(out, paste0(run, "_track.tsv")), sep = "\t", quote = FALSE, col.names = NA)
@@ -525,7 +528,7 @@ We leave `--array` out of the header on purpose. A hard-coded `#SBATCH --array 1
 
 > **Why the *fraction*, not "any merged reads"?** A handful of spuriously-merged non-overlapping reads would otherwise keep an almost-empty merged table in preference to the far larger R1-only set. Forward-reads-only loses the resolution the reverse read adds but keeps the data usable — the run's `_mode.txt` records which path ran, so **note it in your methods**.
 
-- **5e — `removeBimeraDenovo`.** Removes chimeras (Section 1) by consensus across samples. Expect a few to ~20% of *reads* removed, and often many more low-abundance *sequences*; losing most of your reads here points to leftover primer.
+- **5e — `removeBimeraDenovo`.** Removes chimeras (Section 1) by consensus across samples. Expect roughly **20–35% of *reads*** removed here — often about a third of merged V3–V4 reads, since full-length merged amplicons are the most chimera-prone — plus many more low-abundance *sequences*; losing most of your reads points to leftover primer.
 
 - **5f — `assignTaxonomy` + `addSpecies`.** `assignTaxonomy` classifies each ASV down to genus against SILVA 138.1 (a naive-Bayes classifier; `tryRC=TRUE` so it matches whichever strand the ASV is on). `addSpecies` adds a species name only where an ASV matches a reference sequence exactly.
 
@@ -555,18 +558,61 @@ RUN=tofi_v3v4
 column -t asv/$RUN/${RUN}_track.tsv | head -20
 ```
 
-Each row is one sample's read count at each stage. Plotted, those rows should look like the worked example below — every line sloping *gently* down, most reads kept at each step, no single cliff (the red line is the median across its 157 samples):
+Each row is one sample's read count at each stage. Plotted, those rows look like the worked example below — one line per sample, the red line the median across its 157 samples. Reads are lost at *every* step; the shape to learn is *where*:
 
 ![Reads surviving each DADA2 step, one line per sample (illustrative example)](examples/dada2/figures/02_read_tracking.png)
 
-Read your own numbers against this shape. **A steep drop at one transition is the diagnosis:** the column where the reads fall away names the step that went wrong, and the table below turns each drop into a cause.
+Here the gentlest losses are filtering and denoising, and the **largest single drop is the last one — chimera removal** (median ~18,000 → ~11,600 reads, about a third gone). That is expected for merged V3–V4: full-length merged amplicons are the most chimera-prone, so a 20–35% loss there is normal, not a fault.
+
+Read your own numbers against this shape. **A drop far steeper than the example at any one transition is the diagnosis** — the column where the reads fall away names the step that went wrong, and the table below turns each drop into a cause.
 
 | Transition | Healthy | Alarming → likely cause |
 | --- | --- | --- |
 | input → filtered | keep ~70–90% | <50% → `truncLen` too high, or a poor-quality run |
 | filtered → denoisedF | keep ~90%+ | large drop → very few reads, or very low complexity |
 | denoisedF → merged | keep ~70–90% | <20% → reads did not overlap; the script fell back to R1-only (`merged` column is `NA`) |
-| merged → nonchim | keep ~80–95% | <50% → leftover primer inflating chimeras; redo Section 3 |
+| merged → nonchim | keep ~65–90% | <50% → leftover primer inflating chimeras; redo Section 3 |
+
+**Make both plots for your own run.** The example figures here are the shape to compare against; generate your own from the Section 5 outputs — light, no batch job. Save as `06_qc_plots.R`:
+
+```r
+#!/usr/bin/env Rscript
+# Section 6 QC plots from the Section 5 outputs: read-tracking + rarefaction.
+# Light -- a minute or two, no batch job.  Usage: 06_qc_plots.R <asv_dir> <run>
+suppressMessages({ library(ggplot2); library(tidyr); library(vegan) })
+a <- commandArgs(trailingOnly = TRUE); d <- a[1]; run <- a[2]
+
+# read-tracking: one line per sample, red median
+trk <- read.delim(file.path(d, paste0(run, "_track.tsv")), row.names = 1, check.names = FALSE)
+trk$sample <- rownames(trk); steps <- setdiff(colnames(trk), "sample")
+long <- pivot_longer(trk, all_of(steps), names_to = "step", values_to = "reads")
+long$step <- factor(long$step, levels = steps)
+ggsave(file.path(d, paste0(run, "_read_tracking.png")),
+  ggplot(long, aes(step, reads, group = sample)) +
+    geom_line(alpha = 0.25, colour = "#4C72B0") +
+    stat_summary(aes(group = 1), fun = median, geom = "line", colour = "#C44E52", linewidth = 1.1) +
+    labs(x = NULL, y = "reads", title = "Reads through the DADA2 pipeline (red = median)") +
+    theme_minimal(base_size = 11), width = 7.5, height = 4.5, dpi = 120)
+
+# rarefaction: ASV richness vs depth, one curve per sample
+stnc <- readRDS(file.path(d, paste0(run, "_seqtab_nochim.rds")))   # written by Section 5
+png(file.path(d, paste0(run, "_rarefaction.png")), width = 950, height = 680, res = 120)
+rarecurve(stnc, step = 500, label = FALSE, col = "#4C72B0",
+          xlab = "reads sampled", ylab = "ASVs observed", main = "Rarefaction: ASV richness vs depth")
+dev.off()
+cat("wrote read-tracking and rarefaction PNGs to", d, "\n")
+```
+
+```bash
+RUN=tofi_v3v4
+module purge
+module load R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0
+Rscript 06_qc_plots.R asv/$RUN "$RUN"
+```
+
+**How long.** A minute or two.
+
+> **Expect** `<run>_read_tracking.png` and `<run>_rarefaction.png` in `asv/$RUN/`, matching the shapes above. A rarefaction error usually means `<run>_seqtab_nochim.rds` is missing — confirm Section 5 finished.
 
 Then ask whether each sample was sequenced deep enough. A **rarefaction curve** turns a sample's ASV table into a line — ASVs observed as you subsample its reads — and its shape answers the question directly:
 

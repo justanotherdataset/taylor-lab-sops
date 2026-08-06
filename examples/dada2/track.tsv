@@ -1,4 +1,4 @@
-sample	input	filtered	denoised	merged	nonchim
+sample	input	filtered	denoisedF	merged	nonchim
 Sample001	30987	27000	25452	21118	10197
 Sample002	26215	22019	18549	14459	11988
 Sample003	28082	23885	22093	16952	10715

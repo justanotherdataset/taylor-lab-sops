@@ -75,30 +75,28 @@ write.table(data.frame(tax_id = asv, tx, cnt[asv, , drop = FALSE], check.names =
 ## FIGURE 2 -- reads through the pipeline (SOP Section 6)
 gN <- function(x) sum(getUniques(x))
 mergedN <- if (mode == "merged") sapply(mg, gN) else NA
+# denoisedF (not denoised) to match 05_dada2.R and the Section 6 table.
 trk <- data.frame(sample = sn, input = flt[keep, 1], filtered = flt[keep, 2],
-                  denoised = sapply(ddF, gN), merged = mergedN, nonchim = rowSums(stnc))
+                  denoisedF = sapply(ddF, gN), merged = mergedN, nonchim = rowSums(stnc))
 write.table(trk, file.path(exdir, "track.tsv"), sep = "\t", quote = FALSE, row.names = FALSE)
-steps <- c("input", "filtered", "denoised", "merged", "nonchim")
+steps <- c("input", "filtered", "denoisedF", "merged", "nonchim")
 long  <- pivot_longer(trk, all_of(steps), names_to = "step", values_to = "reads")
 long$step <- factor(long$step, levels = steps)
+# same plot code as the SOP's 06_qc_plots.R, so this figure IS what the reader gets
 p2 <- ggplot(long, aes(step, reads, group = sample)) +
-  geom_line(alpha = 0.25, colour = "#4C72B0") + geom_point(size = 0.6, colour = "#4C72B0") +
+  geom_line(alpha = 0.25, colour = "#4C72B0") +
   stat_summary(aes(group = 1), fun = median, geom = "line", colour = "#C44E52", linewidth = 1.1) +
   labs(x = NULL, y = "reads", title = "Reads through the DADA2 pipeline (illustrative example; red = median)") +
   theme_minimal(base_size = 11)
 ggsave(file.path(figdir, "02_read_tracking.png"), p2, width = 7.5, height = 4.5, dpi = 120)
 
-## FIGURE 3 -- rarefaction: ASV richness vs sequencing depth (SOP Section 6)
-meta <- tryCatch(read.delim(metaf), error = function(e) NULL)
-cols <- c(Caucasian = "#4C72B0", Chinese = "#DD8452")
-grp  <- if (!is.null(meta)) meta$Ethnicity[match(sn, meta$SampleID)] else NULL   # sn aligns with stnc rows
-rcol <- if (!is.null(grp) && !all(is.na(grp))) cols[grp] else "#4C72B0"
+## FIGURE 3 -- rarefaction: ASV richness vs sequencing depth (SOP Section 6).
+## Single colour: this is a within-sample depth-QC figure (does each curve plateau?),
+## not a between-group comparison -- grouping belongs downstream in r_analysis/.
 png(file.path(figdir, "03_asv_rarefaction.png"), width = 950, height = 680, res = 120)
-rarecurve(stnc, step = 500, col = rcol, label = FALSE,
+rarecurve(stnc, step = 500, col = "#4C72B0", label = FALSE,
           xlab = "reads sampled", ylab = "ASVs observed",
           main = "Rarefaction: ASV richness vs depth (illustrative example)")
-if (!is.null(grp) && !all(is.na(grp)))
-  legend("bottomright", legend = names(cols), col = cols, lwd = 2, bty = "n", title = "Ethnicity")
 dev.off()
 
 cat(sprintf("example done: mode=%s samples=%d ASVs=%d -> figures in %s\n", mode, nrow(stnc), ncol(stnc), figdir))

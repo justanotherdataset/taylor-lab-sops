@@ -134,4 +134,4 @@ You are welcome to adapt these for your own lab: this repository is licensed **C
 
 *Last updated: August 2026. The five reviewed SOPs and this README were probed against NeSI Mahuika and its R installation, reviewed adversarially through dedicated correctness and tutorial rounds, and rewritten against the findings; `SOP_ASSEMBLY_NeSI.md` (v1.0) was brought to the same standard, and a whole-suite capstone review followed in August 2026. The specification, review prompts, and full review records are kept with the lab's internal materials.*
 
-*`SOP_DADA2_NeSI.md` (v1.0) is the sixth SOP, newly added for Illumina short-read 16S (V3–V4); it awaits its own correctness and tutorial review before promotion.*
+*`SOP_DADA2_NeSI.md` (v1.0) is the sixth SOP, newly added for Illumina short-read 16S (V3–V4). It has been through an on-cluster correctness review (fixture-verified hand-off) and a tutorial/style review against the spec, with the findings applied; final promotion to the released set is the lab's call.*

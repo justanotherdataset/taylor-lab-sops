@@ -6,7 +6,7 @@
 
 **Contents:** [Quick Roadmap](#quick-roadmap) · [1. Understanding Your Data](#1-understanding-your-data) · [2. Set Up the Environment](#2-set-up-the-environment) · [3. Remove Primers with cutadapt](#3-remove-primers-with-cutadapt) · [4. Inspect Quality and Choose truncLen](#4-inspect-quality-and-choose-trunclen) · [5. Denoise to ASVs and Assign Taxonomy](#5-denoise-to-asvs-and-assign-taxonomy) · [6. Read-Tracking QC](#6-read-tracking-qc) · [7. Hand Off to R](#7-hand-off-to-r) · [Troubleshooting](#troubleshooting) · [Appendices](#appendices)
 
-This document covers the DADA2 workflow on NeSI for paired-end short-read Illumina 16S — the V3–V4 region, amplified with the 341F/785R primers. It takes raw demultiplexed FASTQs through to an **amplicon sequence variant (ASV) count table** and a matching **taxonomy table**. Those two tables, plus a metadata sheet, are the input to `SOP_R_Analysis.md`, which does the statistics. This is the short-read counterpart of `SOP_EMU_NeSI.md` (Nanopore full-length 16S).
+This document covers the DADA2 workflow on NeSI for paired-end short-read Illumina 16S — the V3–V4 region, amplified with the 341F/785R primers. It takes raw demultiplexed FASTQs through to a single **amplicon sequence variant (ASV) count table with a taxonomy column for every ASV** (`counts_dada2.tsv`). That table, plus a metadata sheet, is the input to `SOP_R_Analysis.md`, which does the statistics. This is the short-read counterpart of `SOP_EMU_NeSI.md` (Nanopore full-length 16S).
 
 **This is the classic single-run workflow:** one sequencing run, one ASV table. It does **not** merge tables across runs, regions or studies. Pooling short-read 16S across runs has its own traps (different error models, different primer regions) and gives wrong answers silently if done casually, so it is a separate meta-analysis concern kept out of this SOP. Process each run through here on its own.
 
@@ -45,7 +45,7 @@ SECTION 7: Hand off to R
    counts_dada2.tsv + metadata  ->  SOP_R_Analysis.md
 ```
 
-**The one thing to remember:** `truncLen` (Section 4) is where this pipeline most often fails silently. Set it too aggressively and `filterAndTrim` throws away every read, or the forward and reverse reads no longer overlap and merging collapses. Read the quality profile before you set it, and check the read-tracking table (Section 6) after.
+**The one thing to remember:** `truncLen` (Section 4) — how far each read is trimmed — is where this pipeline most often fails silently. Set it too aggressively and `filterAndTrim` throws away every read, or the forward and reverse reads no longer overlap and merging collapses. Read the quality profile before you set it, and check the read-tracking table (Section 6) after.
 
 ---
 
@@ -330,7 +330,12 @@ The plot shows quality score (y) against read position (x). The green line is th
 
 **Checkpoint.**
 
-> **Expect** two PDFs with quality curves, R2 dropping off before R1. Write your chosen `truncF` and `truncR` down for Section 5. If the curves are already low across the whole read, the run is low quality — expect heavier losses at `filterAndTrim` and a lower merge rate.
+```bash
+RUN=tofi_v3v4
+ls -lh asv/$RUN/qualityF.pdf asv/$RUN/qualityR.pdf
+```
+
+> **Expect** both PDFs present and non-zero, showing quality against read position with R2 dropping off before R1. A **missing or zero-byte** PDF means the job failed — read `logs/qprofile_*.err` (usually a wrong module string). Write your chosen `truncF` and `truncR` down for Section 5. If the curves are already low across the whole read, the run is low quality — expect heavier losses at `filterAndTrim` and a lower merge rate.
 
 ---
 
@@ -512,7 +517,7 @@ We leave `--array` out of the header on purpose. A hard-coded `#SBATCH --array 1
 
 - **5f — `assignTaxonomy` + `addSpecies`.** `assignTaxonomy` classifies each ASV down to genus against SILVA 138.1 (a naive-Bayes classifier; `tryRC=TRUE` so it matches whichever strand the ASV is on). `addSpecies` adds a species name only where an ASV matches a reference sequence exactly.
 
-- **5g — reshape.** Assigns readable ASV IDs (`ASV0001`…), writes the ASV sequences to a FASTA (the IDs are only meaningful alongside it), renames the ranks to the R analysis's names (`Kingdom` → `superkingdom`, all lowercase), and writes `counts_dada2.tsv` in the exact shape `SOP_R_Analysis.md` Section 3 loads.
+- **5g — reshape.** Assigns readable ASV IDs (`ASV0001`…), writes the ASV sequences to a FASTA (the IDs are only meaningful alongside it), renames the ranks to the R analysis's names (`Kingdom` → `superkingdom`, all lowercase), and writes `counts_dada2.tsv` in the exact shape `SOP_R_Analysis.md` Section 3 loads. It also writes `<run>_taxonomy.tsv`, a standalone taxonomy-only table (same ASV IDs) for convenience — the R analysis reads `counts_dada2.tsv`, not this.
 
 **How long.** For ~200 samples, `learnErrors` and `dada` dominate — a few hours; `assignTaxonomy` adds 30–60 minutes. The 8-hour header leaves headroom.
 
@@ -520,12 +525,12 @@ We leave `--array` out of the header on purpose. A hard-coded `#SBATCH --array 1
 
 ```bash
 RUN=tofi_v3v4
-ls -1 asv/$RUN/${RUN}_seqtab_nochim.rds asv/$RUN/${RUN}_track.tsv asv/$RUN/${RUN}_asv.fasta asv/$RUN/counts_dada2.tsv
+ls -1 asv/$RUN/${RUN}_seqtab_nochim.rds asv/$RUN/${RUN}_track.tsv asv/$RUN/${RUN}_asv.fasta asv/$RUN/${RUN}_taxonomy.tsv asv/$RUN/counts_dada2.tsv
 cat asv/$RUN/${RUN}_mode.txt                    # "merged" (good) or "R1only" (overlap failed)
 grep -c "^>" asv/$RUN/${RUN}_asv.fasta          # number of ASVs
 ```
 
-> **Expect** all four files present, `mode` = **`merged`** for 2×300 V3–V4, and a few hundred to a few thousand ASVs. `mode` = **`R1only`** means the merge failed — read Section 6 before trusting the table. **Zero** ASVs, or a job that died at `filterAndTrim`, means `truncLen` was too high — lower it (Section 4) and re-run.
+> **Expect** all five files present, `mode` = **`merged`** for 2×300 V3–V4, and a few hundred to a few thousand ASVs. `mode` = **`R1only`** means the merge failed — read Section 6 before trusting the table. **Zero** ASVs, or a job that died at `filterAndTrim`, means `truncLen` was too high — lower it (Section 4) and re-run.
 
 ---
 
@@ -554,6 +559,8 @@ Also check that enough reads survive per sample. A common floor for diversity wo
 awk -F'\t' 'NR>1{print $NF"\t"$1}' asv/$RUN/${RUN}_track.tsv | sort -n | head -5
 ```
 
+**How long.** Seconds — these are checks you read at the prompt, not jobs.
+
 > **Expect** most samples retaining a healthy fraction at every transition and a median well into the thousands. A **uniform** cliff at one transition across all samples is a parameter problem (fix it and re-run Section 5); a cliff in **only a few** samples is those samples' own quality (flag or drop them).
 
 ---
@@ -574,11 +581,22 @@ Two things the R analysis does not know about DADA2 output:
 
 **Build the metadata sheet** as `SOP_R_Analysis.md` Section 3 describes: tab-separated, one row per sample, sample IDs in the first column, and a `SampleType` column (`"sample"` or `"blank"`) so the decontam step can find your negative controls. Include your grouping variables and, if you have them, `Batch` and `Plate`.
 
+**Keep a backed-up copy on project first.** `asv/$RUN/` sits on nobackup, which is purged on a rolling basis, so copy the outputs to your backed-up `project` space before anything else:
+
+```bash
+RUN=tofi_v3v4
+DEST=/nesi/project/<your_nesi_project_code>/<your_project>
+mkdir -p "$DEST"
+cp asv/$RUN/counts_dada2.tsv asv/$RUN/${RUN}_taxonomy.tsv asv/$RUN/${RUN}_track.tsv asv/$RUN/${RUN}_asv.fasta "$DEST"/
+```
+
 **Copy the files down** to the machine where you run R:
 
 ```bash
 scp <username>@login.mahuika.nesi.org.nz:/nesi/nobackup/<your_nesi_project_code>/<your_project>/asv/<run>/counts_dada2.tsv .
 ```
+
+**How long.** Seconds to a couple of minutes — a small `cp` on the cluster, then an `scp` whose time depends on the count table's size and your connection.
 
 **Checkpoint** — sample IDs match before R:
 

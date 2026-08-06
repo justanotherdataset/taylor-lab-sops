@@ -44,7 +44,7 @@ the k-anonymity floor:
 | --- | --- |
 | Cohort | Taylor Lab **TOFI FU** microbiome study |
 | Assay | Illumina paired-end **2×300 bp**, 16S **V3–V4** (341F / 785R) |
-| Published basis | The cohort's shotgun metagenome is already public under **`<BioProject — fill in>`**, with the same Ethnicity/Gender framing; this de-identified 16S teaching subset is consistent with it. |
+| Published basis | **⚠ Fill in before public release.** The de-identified release rests on the cohort's shotgun metagenome already being public under BioProject **`<PRJNA/PRJEB — fill in>`** (same Ethnicity/Gender framing). Until this accession is confirmed, the ethics basis is unverifiable — do not merge this example to a public release branch. |
 | Raw 16S reads | Held in the lab **project directory** (access-controlled); **not** publicly deposited. Lab members reproduce via `run_example.sh`; external readers see the committed illustrative figures. |
 | Samples used | The **157** cleanly read↔metadata-matched, non-control samples (controls and non-standard IDs excluded — see below). |
 

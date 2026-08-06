@@ -56,6 +56,13 @@ The NeSI modules these SOPs were written against, confirmed present on Mahuika i
 | NanoPlot | `NanoPlot/1.43.0-foss-2023a-Python-3.11.6` | Read QC plots and statistics |
 | chopper | `chopper/0.12.0b-GCC-12.3.0` | Quality and length filtering |
 
+**Amplicon, Illumina (DADA2):**
+
+| Tool | Module string | Purpose |
+| --- | --- | --- |
+| cutadapt | `cutadapt/5.2-foss-2023a-Python-3.11.6` | Primer removal (341F/785R) |
+| DADA2 (R/Bioconductor) | `R-bundle-Bioconductor/3.23-foss-2026-R-4.6.0` | Denoising to ASVs, SILVA 138.1 taxonomy |
+
 **Consensus OTUs (CONCOMPRA):** the pipeline runs from a conda environment built via `Miniforge3/25.3.1-0`; the deduplication step uses `SeqKit/2.4.0`; post-processing uses `VSEARCH/2.21.1-GCC-11.3.0`, `MAFFT/7.505-gimkl-2022a-with-extensions`, `FastTree/2.1.11-GCC-11.3.0` and `seqtk/1.4-GCC-11.3.0`.
 
 **Shotgun, read-based:**
@@ -89,7 +96,9 @@ HUMAnN is deliberately **not** taken from a module — NeSI's `Humann/3.0.0.alph
 
 GTDB-Tk, CheckM2, Bakta, eggNOG-mapper (`eggnog-mapper/2.1.12-gimkl-2022a`) and DRAM (`DRAM/1.3.5-Miniconda3`) resolve their large reference databases from NeSI's central `/opt/nesi/db` — nothing to download.
 
-Reference databases: SILVA v138.1 and RDP for the amplicon work, via Emu's prebuilt OSF archives. `SOP_EMU_NeSI.md` explains why we use the validated v138.1 build rather than the newer SILVA 138.2 archive, and why we run both databases and compare. The read-based SOP pins the MetaPhlAn index explicitly (`mpa_vJun23_CHOCOPhlAnSGB_202403`) and explains why an unpinned index makes results depend on when the database was last refreshed.
+Reference databases: SILVA v138.1 and RDP for the Nanopore amplicon work, via Emu's prebuilt OSF archives. `SOP_EMU_NeSI.md` explains why we use the validated v138.1 build rather than the newer SILVA 138.2 archive, and why we run both databases and compare. The DADA2 short-read workflow uses the DADA2-formatted SILVA 138.1 build from Zenodo (record 4587955) — the same release, packaged differently.
+
+The read-based SOP pins the MetaPhlAn index explicitly (`mpa_vJun23_CHOCOPhlAnSGB_202403`) and explains why an unpinned index makes results depend on when the database was last refreshed.
 
 ## Contributing
 
@@ -114,6 +123,7 @@ If these SOPs shaped your methods, cite the underlying tools rather than this re
 | **Nanopore amplicons (Emu)** | Emu — Curry et al. 2022, *Nature Methods*; chopper — De Coster & Rademakers 2023, *Bioinformatics*; SILVA — Quast et al. 2013, *Nucleic Acids Research*. |
 | **CONCOMPRA** | the pipeline — Stock et al. 2025; SINTAX — Edgar 2016; MAFFT — Katoh & Standley 2013; FastTree — Price et al. 2010 (all in that SOP's Appendix B). |
 | **Read-based shotgun** | MetaPhlAn 4 — Blanco-Míguez et al. 2023, *Nature Biotechnology*; re-identification from residual human reads — Tomofuji et al. 2023, *Nature Microbiology*; DA-method benchmarking — Yang & Chen 2022, *Microbiome*. |
+| **Illumina amplicons (DADA2)** | DADA2 — Callahan et al. 2016, *Nature Methods*; cutadapt — Martin 2011, *EMBnet.journal*; V3–V4 primers — Klindworth et al. 2013, *Nucleic Acids Research*; SILVA — Quast et al. 2013 (DADA2-formatted 138.1, Zenodo 4587955). |
 | **R analysis** | rarefaction debate — McMurdie & Holmes 2014, *PLoS Computational Biology*, and Schloss 2024, *mSphere*; DA-method comparison — Nearing et al. 2022, *Nature Communications*; indicator species — Dufrêne & Legendre 1997, *Ecological Monographs*. |
 
 For the remaining R packages, look up the citation with `citation("phyloseq")` and equivalents. Record your package versions with `sessionInfo()` and keep the output alongside your results. For shotgun work, the read-based SOP's Section 14 lists what a methods section needs — the MetaPhlAn index tag, the HUMAnN and ChocoPhlAn/UniRef versions, whether the host reference was masked, the depth gates, which samples were excluded and why, and every model formula.

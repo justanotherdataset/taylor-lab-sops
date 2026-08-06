@@ -1,0 +1,16 @@
+Alpha diversity (SRS-normalised ps_srs), by Ethnicity and Gender
+
+Group medians:
+  Ethnicity Gender Observed  Shannon
+1 Caucasian Female     99.0 3.701743
+2   Chinese Female    102.5 3.922250
+3 Caucasian   Male    106.0 3.911659
+4   Chinese   Male    101.0 3.761712
+
+== Observed ==
+Wilcoxon by Ethnicity: p = 0.95462 
+Wilcoxon by Gender   : p = 0.5343 
+
+== Shannon ==
+Wilcoxon by Ethnicity: p = 0.73415 
+Wilcoxon by Gender   : p = 0.51339 

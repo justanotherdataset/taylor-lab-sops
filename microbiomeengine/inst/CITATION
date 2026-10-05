@@ -1,0 +1,5 @@
+bibentry(bibtype="Manual",
+  title="Microbiome Engine: Declared Microbiome Projects and Reproducible Diversity Analyses",
+  author=person("Saif", email="saiffaraj181@gmail.com"),
+  year="2026", note="R package version 0.1.0; early tester release",
+  url="https://github.com/justanotherdataset/taylor-lab-sops/tree/main/microbiomeengine")

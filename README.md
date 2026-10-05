@@ -6,6 +6,12 @@
 
 Standard operating procedures for microbial community analysis on [NeSI](https://www.nesi.org.nz/) (New Zealand eScience Infrastructure) and in R, written for someone running their first analysis. Each SOP is a complete walkthrough — what a step does, the exact commands, and what correct output looks like.
 
+## Local microbiome engine — early tester version
+
+The [Microbiome Engine](microbiomeengine/README.md) is a local R/Shiny app for merged MetaPhlAn tables, metadata/design declarations, preparation, composition, alpha diversity and beta diversity (Bray–Curtis, Aitchison and robust Aitchison), with saved projects and reproducible exports. Its [quickstart](microbiomeengine/README.md#download-and-run-in-rstudio) explains downloading the ZIP, opening the RStudio project, installing dependencies and launching the synthetic example. See the [tester walkthrough](microbiomeengine/TESTING.md) and [validation/limitations](microbiomeengine/RELEASE-VALIDATION.md); this is an early tester release, with further UI refinements planned.
+
+**Licence boundary:** the engine subtree and its microbiome-engine issue templates use **GPL-3** ([engine licence](microbiomeengine/LICENSE)); the SOP documents retain **CC BY 4.0**. External dependencies keep their own licences and are installed separately. [Third-party notices](microbiomeengine/THIRD-PARTY-NOTICES.md) record the separate dependency licences and unresolved combined-distribution GPL-version boundary. Report safe reproducible bugs or usability feedback through this repository's Issues.
+
 ## Which SOP do I need?
 
 | Your data | Upstream (cluster) | Downstream (R) |
@@ -128,7 +134,7 @@ If these SOPs shaped your methods, cite the underlying tools rather than this re
 
 For the remaining R packages, look up the citation with `citation("phyloseq")` and equivalents. Record your package versions with `sessionInfo()` and keep the output alongside your results. For shotgun work, the read-based SOP's Section 14 lists what a methods section needs — the MetaPhlAn index tag, the HUMAnN and ChocoPhlAn/UniRef versions, whether the host reference was masked, the depth gates, which samples were excluded and why, and every model formula.
 
-You are welcome to adapt these for your own lab: this repository is licensed **CC BY 4.0** (see [`LICENSE`](LICENSE)) — reuse is fine with attribution.
+You are welcome to adapt these for your own lab: the SOP documents in this repository are licensed **CC BY 4.0** (see [`LICENSE`](LICENSE)) — reuse is fine with attribution.
 
 ---
 

@@ -1,0 +1,72 @@
+alpha_ui <- function() shiny::tabPanel("Alpha",
+ shiny::h3("Individual alpha diversity"),
+ shiny::uiOutput("alpha_input_context"),shiny::uiOutput("alpha_rank_controls"),shiny::textOutput("alpha_rank_pending"),
+ shiny::uiOutput("alpha_controls"),shiny::actionButton("alpha_apply","Calculate alpha",class="btn-primary"),
+ shiny::textOutput("alpha_status"),shiny::textOutput("alpha_pending"),shiny::uiOutput("alpha_plot_panel"),
+ shiny::tags$details(shiny::tags$summary("Observation plot styles"),shiny::uiOutput("alpha_style_controls"),shiny::actionButton("alpha_style_apply","Apply plot styles")),
+ shiny::tags$details(shiny::tags$summary("Values, units and undefined reasons"),shiny::div(class="table-wrap",shiny::tableOutput("alpha_values"))),
+ shiny::tags$details(shiny::tags$summary("Design-aware comparisons"),shiny::p("Inference requires experimental-unit and assignment evidence. Repeated samples are not independent replication. No test is selected by a normality p-value."),shiny::uiOutput("alpha_compare_controls"),shiny::actionButton("alpha_compare","Apply comparison",class="btn-primary"),shiny::textOutput("alpha_compare_status"),shiny::div(class="table-wrap",shiny::tableOutput("alpha_tests")),shiny::h4("Excluded observations"),shiny::div(class="table-wrap",shiny::tableOutput("alpha_exclusions")),shiny::plotOutput("alpha_estimates",height="500px")),
+ shiny::tags$details(shiny::tags$summary("Saved model diagnostics"),shiny::p("Inspect assumptions and influential observations. These plots do not certify model validity. No model is refitted when a plot is rendered or styled."),shiny::uiOutput("alpha_diagnostic_controls"),shiny::uiOutput("alpha_diagnostic_plots"),shiny::div(class="table-wrap",shiny::tableOutput("alpha_diagnostic_data"))),
+ shiny::h4("Save alpha outputs"),shiny::downloadButton("alpha_figure","Download observation figure"),shiny::downloadButton("alpha_data","Download values"),shiny::textInput("alpha_export_path","New alpha export folder (full path)"),shiny::actionButton("alpha_export","Export alpha report, figures, model data and replay"))
+
+alpha_manual_text <- function(x)if(length(x))paste(names(x),x,sep="\t",collapse="\n") else ""
+alpha_manual_parse <- function(text,numeric=FALSE) {
+ if(!nzchar(trimws(text)))return(if(numeric)integer() else character())
+ lines<-strsplit(text,"\n",fixed=TRUE)[[1]];pairs<-strsplit(lines,"\t",fixed=TRUE)
+ if(any(lengths(pairs)!=2L))stop("Manual styles: one exact displayed level, TAB, value per line.")
+ out<-vapply(pairs,`[`,character(1),2L);names(out)<-vapply(pairs,`[`,character(1),1L)
+ if(numeric){v<-suppressWarnings(as.numeric(out));names(v)<-names(out);out<-v};out
+}
+alpha_server <- function(input,output,session,state,status) {
+ safe<-function(expr)tryCatch(force(expr),error=function(e)status(conditionMessage(e)))
+ fallback<-function(id,value){v<-input[[id]];if(is.null(v))value else v}
+ metric_settings<-shiny::reactive({p<-state();old<-if(is.null(p$alpha))alpha_settings() else p$alpha$settings;list(source=fallback("alpha_source",old$source),metrics=as.character(fallback("alpha_metrics",old$metrics)))})
+ style_settings<-shiny::reactive({p<-state();s<-alpha_plot_settings(if(is.null(p$alpha$plot_settings))list() else p$alpha$plot_settings);for(n in c("group","facet","colour","colour_type","fixed_colour","palette","shape","fixed_shape","trajectories"))s[[n]]<-fallback(paste0("alpha_",n),s[[n]])
+  s$colours<-alpha_manual_parse(fallback("alpha_colours",alpha_manual_text(s$colours)));s$shapes<-alpha_manual_parse(fallback("alpha_shapes",alpha_manual_text(s$shapes)),TRUE)
+  order<-fallback("alpha_order",paste(s$order,collapse="\n"));s$order<-if(nzchar(order))strsplit(order,"\n",fixed=TRUE)[[1]] else character()
+  for(n in c("format","units","width","height","dpi"))s$figure[[n]]<-fallback(paste0("alpha_fig_",n),s$figure[[n]]);s
+ })
+ comparison_settings<-shiny::reactive({p<-state();s<-alpha_comparison_settings(if(is.null(p$alpha$comparison))list() else p$alpha$comparison$settings)
+  for(n in names(s))if(n!="conf_level")s[[n]]<-fallback(paste0("alpha_cmp_",n),s[[n]])
+  s$covariates<-as.character(s$covariates);s
+ })
+ pending<-shiny::reactive({p<-state();if(diversity_rank_pending(input,p,"alpha"))return(TRUE);if(is.null(p$alpha))return(FALSE)
+  tryCatch(!identical(alpha_settings(metric_settings()),p$alpha$settings)||!isTRUE(all.equal(alpha_plot_settings(style_settings()),alpha_plot_settings(if(is.null(p$alpha$plot_settings))list() else p$alpha$plot_settings)))||(!is.null(p$alpha$comparison)&&!isTRUE(all.equal(alpha_comparison_settings(comparison_settings()),p$alpha$comparison$settings))),error=function(e)TRUE)
+ })
+ guard<-function(){if(isTRUE(pending()))stop("Alpha controls have unapplied edits. Calculate alpha, apply plot styles or apply comparison before saving/exporting.");if(!is.null(state()$alpha))alpha_current(state())}
+ output$alpha_controls<-shiny::renderUI({p<-state();shiny::req(p);s<-if(is.null(p$alpha))alpha_settings() else p$alpha$settings
+  shiny::fluidRow(shiny::column(6,shiny::selectInput("alpha_source","Measurement source",c(setNames("relative",diversity_source_label(p)),if(!is.null(p$input$estimated))c("Estimated reads"="estimated_reads")),selected=s$source,selectize=FALSE)),shiny::column(6,shiny::selectInput("alpha_metrics","Indices",names(alpha_metrics()),selected=s$metrics,multiple=TRUE,selectize=FALSE)))
+ })
+ output$alpha_style_controls<-shiny::renderUI({p<-state();shiny::req(p$experiment);s<-alpha_plot_settings(if(is.null(p$alpha$plot_settings))list() else p$alpha$plot_settings);fields<-names(as.data.frame(SummarizedExperiment::colData(p$experiment)));catfields<-fields[!vapply(as.data.frame(SummarizedExperiment::colData(p$experiment)),is.numeric,logical(1))]
+  shiny::tagList(shiny::fluidRow(shiny::column(6,select_field("alpha_group","X group (blank = individual sample IDs)",fields,s$group)),shiny::column(6,select_field("alpha_facet","Facet",fields,s$facet))),shiny::fluidRow(shiny::column(6,select_field("alpha_colour","Colour metadata (independent of x/facet)",fields,s$colour)),shiny::column(6,shiny::selectInput("alpha_colour_type","Colour scale",c("categorical","continuous"),s$colour_type,selectize=FALSE))),shiny::fluidRow(shiny::column(6,shiny::textInput("alpha_fixed_colour","Fixed colour / estimate colour",s$fixed_colour)),shiny::column(6,shiny::selectInput("alpha_palette","Palette",grDevices::hcl.pals(),s$palette,selectize=FALSE))),shiny::fluidRow(shiny::column(6,select_field("alpha_shape","Categorical shape metadata",catfields,s$shape)),shiny::column(6,shiny::numericInput("alpha_fixed_shape","Fixed point / estimate shape (0\u201325)",s$fixed_shape,min=0,max=25,step=1))),shiny::helpText("Blank mapping uses a fixed style. Shapes 21\u201325 use the selected colour for fill and outline. Missing categorical values have a separate collision-safe label; continuous missing colour is grey. Shape levels must have distinct symbols. Estimates use target-group styles when the comparison group column is mapped; other sample metadata uses the fixed estimate style."),shiny::textAreaInput("alpha_colours","Custom colours: exact displayed level, TAB, colour per line",alpha_manual_text(s$colours)),shiny::textAreaInput("alpha_shapes","Custom shapes: exact displayed level, TAB, integer per line",alpha_manual_text(s$shapes)),shiny::textAreaInput("alpha_order","Optional x order: every exact displayed level, one per line",paste(s$order,collapse="\n")),shiny::checkboxInput("alpha_trajectories","Connect verified pairs/subjects (x must be condition/time)",s$trajectories),shiny::selectInput("alpha_fig_units","Figure units",c("in","cm","mm"),s$figure$units,selectize=FALSE),shiny::fluidRow(shiny::column(3,shiny::selectInput("alpha_fig_format","Format",c("png","pdf",if(requireNamespace("svglite",quietly=TRUE))"svg"),s$figure$format,selectize=FALSE)),shiny::column(3,shiny::numericInput("alpha_fig_width","Width",s$figure$width,min=.5,max=40)),shiny::column(3,shiny::numericInput("alpha_fig_height","Height",s$figure$height,min=.5,max=40)),shiny::column(3,shiny::numericInput("alpha_fig_dpi","DPI",s$figure$dpi,min=72,max=600))))
+ })
+ output$alpha_compare_controls<-shiny::renderUI({p<-state();shiny::req(p$experiment);s<-alpha_comparison_settings(if(is.null(p$alpha$comparison))list() else p$alpha$comparison$settings);fields<-names(as.data.frame(SummarizedExperiment::colData(p$experiment)))
+  shiny::tagList(shiny::selectInput("alpha_cmp_method","Method",c("Independent Welch t"="welch","Independent equal-variance Student t"="student","Paired t"="paired","Additive linear model"="lm","Group \u00d7 time random-intercept mixed model"="mixed"),s$method,selectize=FALSE),select_field("alpha_cmp_group","Group / paired condition",fields,s$group),shiny::textInput("alpha_cmp_reference","Exact reference group label",s$reference),select_field("alpha_cmp_unit","Experimental unit / pair / subject ID",fields,s$unit),shiny::selectInput("alpha_cmp_assignment","Declared assignment",c("Independent experimental units"="independent_units","Independent subjects with repeated observations"="independent_subjects","Unknown or other clustered design (blocked)"="unknown"),s$assignment,selectize=FALSE),shiny::checkboxInput("alpha_cmp_verified","I verified unit identity and assignment from study evidence",s$verified),shiny::textAreaInput("alpha_cmp_evidence","Design evidence (source / protocol and justification)",s$evidence),shiny::selectInput("alpha_cmp_covariates","Numeric additive covariates (LM/mixed only)",fields,s$covariates,multiple=TRUE,selectize=FALSE),select_field("alpha_cmp_time","Time / visit column (mixed only)",fields,s$time),shiny::selectInput("alpha_cmp_time_mode","Time interpretation",c("Categorical visit"="factor","Numeric linear time"="numeric"),s$time_mode,selectize=FALSE),shiny::numericInput("alpha_cmp_at_time","Numeric time for group contrasts",s$at_time),shiny::selectInput("alpha_cmp_adjust","Planned family p adjustment",c("Holm"="holm","BH"="BH","None (explicit)"="none"),s$adjust,selectize=FALSE),shiny::textInput("alpha_cmp_family","Family name (all selected metrics and tests)",s$family),shiny::helpText("LM: conditional group omnibus plus every nonreference-minus-reference contrast at mean numeric covariates. Mixed: Type III group\u00d7time interaction plus group contrasts per visit / specified numeric time, Satterthwaite df. At least 6 independent subjects and 3 per group; group fixed within subject, one observation per subject/time. Random intercept alone does not model arbitrary serial correlation. Complex clustering, crossover, random slopes and count/tree methods are unsupported."))
+ })
+ shiny::observeEvent(input$alpha_apply,safe({p<-state();shiny::req(p);if(diversity_rank_pending(input,p,"alpha"))stop("Apply the pending shared rank before calculating alpha.");state(apply_alpha(p,metric_settings(),if(is.null(p$alpha))list() else p$alpha$plot_settings));status("Alpha calculated. Review values and undefined reasons; reapply a comparison if needed.")}))
+ shiny::observeEvent(input$alpha_style_apply,safe({p<-state();shiny::req(p$alpha);s<-alpha_plot_settings(style_settings());p$alpha$plot_settings<-s;plot_alpha(p);state(p);status("Plot styles applied; alpha values and fitted models unchanged.")}))
+ shiny::observeEvent(input$alpha_compare,safe({p<-state();shiny::req(p$alpha);alpha_current(p);if(!identical(alpha_settings(metric_settings()),p$alpha$settings))stop("Calculate pending alpha metric settings before fitting.");p$alpha$comparison<-compare_alpha(p$alpha,comparison_settings());state(p);status(paste("Comparison",p$alpha$comparison$status,p$alpha$comparison$reason))}))
+ output$alpha_status<-shiny::renderText({a<-state()$alpha;if(is.null(a))return("Calculate alpha to begin.");paste("Alpha",a$status,a$reason)})
+ output$alpha_pending<-shiny::renderText(diversity_result_message(state(),"alpha",pending()))
+ output$alpha_values<-shiny::renderTable(state()$alpha$values,digits=7)
+ output$alpha_plot_panel<-shiny::renderUI(diversity_plot_panel(state(),"alpha"))
+ output$alpha_plot<-shiny::renderPlot({shiny::req(diversity_plot_available(state(),"alpha"));plot_alpha(state())})
+ output$alpha_tests<-shiny::renderTable({d<-state()$alpha$comparison$tests;if(!is.null(d))for(n in c("p_raw","p_adjusted"))d[[n]]<-ifelse(is.na(d[[n]]),NA_character_,format(d[[n]],digits=8,scientific=TRUE));d},digits=8)
+ output$alpha_exclusions<-shiny::renderTable(state()$alpha$comparison$exclusions)
+ output$alpha_compare_status<-shiny::renderText({c<-state()$alpha$comparison;paste(c$status,c$reason)})
+ output$alpha_estimates<-shiny::renderPlot({shiny::req(diversity_plot_available(state(),"alpha"),state()$alpha$comparison);plot_alpha_estimates(state())})
+ output$alpha_diagnostic_controls<-shiny::renderUI({c<-state()$alpha$comparison;metrics<-names(c$diagnostics)[vapply(c$diagnostics,function(d)!is.null(d$plot_data),logical(1))];if(!length(metrics))return(shiny::p("No fitted model diagnostics yet. Failed fits remain in the comparison table."));shiny::selectInput("alpha_diagnostic_metric","Saved fitted metric",metrics,selectize=FALSE)})
+ diagnostic_plots<-shiny::reactive({shiny::req(diversity_plot_available(state(),"alpha"),state()$alpha$comparison,input$alpha_diagnostic_metric);plot_alpha_diagnostics(state(),input$alpha_diagnostic_metric)})
+ output$alpha_diagnostic_plots<-shiny::renderUI({pp<-diagnostic_plots();shiny::tagList(lapply(seq_along(pp),function(i)shiny::plotOutput(paste0("alpha_diag_",i),height="370px")))})
+ for(i in 1:5)local({j<-i;output[[paste0("alpha_diag_",j)]]<-shiny::renderPlot({pp<-diagnostic_plots();shiny::req(length(pp)>=j);pp[[j]]})})
+ output$alpha_diagnostic_data<-shiny::renderTable({shiny::req(input$alpha_diagnostic_metric);state()$alpha$comparison$diagnostics[[input$alpha_diagnostic_metric]]$plot_data},digits=7)
+ output$alpha_figure<-shiny::downloadHandler(filename=function()paste0("alpha.",alpha_plot_settings(state()$alpha$plot_settings)$figure$format),content=function(file){guard();s<-alpha_plot_settings(state()$alpha$plot_settings)$figure;alpha_write_figure(plot_alpha(state()),file,s)})
+ output$alpha_data<-shiny::downloadHandler(filename=function()"alpha-values.tsv",content=function(file){guard();utils::write.table(state()$alpha$values,file,sep="\t",row.names=FALSE,quote=TRUE)})
+ shiny::observeEvent(input$alpha_export,safe({guard();export_alpha(state(),input$alpha_export_path);status(paste("Alpha export complete:",input$alpha_export_path))}))
+ guard
+}
+
+
+
+
+

@@ -1,0 +1,8 @@
+#measurement=estimated_reads
+clade_name	S4	S2	S1	S3
+UNCLASSIFIED	100	100	100	100
+k__Bacteria	900	900	900	900
+k__Bacteria|p__Firmicutes|g__Alpha	300	200	100	400
+k__Bacteria|p__Bacteroidota|g__Beta	600	700	800	500
+k__Bacteria|p__Bacteroidota|g__Beta|s__Beta_one	600	700	800	500
+k__Bacteria|p__Firmicutes|g__Alpha|s__Alpha_one	300	200	100	400

@@ -1,0 +1,174 @@
+run_app <- function(port=7349,launch.browser=interactive(),project=NULL) {
+ if(!is.null(project))check_project(project)
+ server<-function(input,output,session)app_server(input,output,session,project)
+ shiny::runApp(shiny::shinyApp(app_ui(),server),host="127.0.0.1",port=port,launch.browser=launch.browser)
+}
+select_field <- function(id,label,fields,selected="") shiny::selectInput(id,label,c("Not applicable / not provided"="",setNames(fields,fields)),selected=selected,selectize=FALSE)
+rank_choices <- function(input) {
+ labels<-c(k="Kingdom",p="Phylum",c="Class",o="Order",f="Family",g="Genus",s="Species",t="SGB / strain-level feature")
+ present<-unique(sub("__.*","",sub(".*\\|","",input$feature_ids)))
+ ranks<-intersect(names(labels),present)
+ c("Choose a rank"="",setNames(ranks,labels[ranks]))
+}
+app_ui <- function() shiny::fluidPage(
+ shiny::tags$script(shiny::HTML("document.addEventListener('click', function(event) {
+  var button = event.target.closest('button');
+  if (!button || !window.Shiny) return;
+  if (button.id.startsWith('assay_')) {
+   ['assay_name','assay_export_path'].forEach(function(id) { var el=document.getElementById(id); if(el) Shiny.setInputValue(id,el.value,{priority:'event'}); });
+   var pc=document.getElementById('assay_pseudocount'); if(pc) Shiny.setInputValue('assay_pseudocount',pc.value.trim()===''?'':Number(pc.value),{priority:'event'});
+  }
+  if (button.id.startsWith('alpha_')) {
+   ['alpha_fixed_shape','alpha_fig_width','alpha_fig_height','alpha_fig_dpi','alpha_cmp_at_time'].forEach(function(id) { var el=document.getElementById(id); if(el) Shiny.setInputValue(id,el.value.trim()===''?'':Number(el.value),{priority:'event'}); });
+   ['alpha_fixed_colour','alpha_colours','alpha_shapes','alpha_order','alpha_cmp_reference','alpha_cmp_evidence','alpha_cmp_family','alpha_export_path'].forEach(function(id) { var el=document.getElementById(id); if(el) Shiny.setInputValue(id,el.value,{priority:'event'}); });
+  }
+  if (button.id.startsWith('beta_')) {
+   ['beta_max_samples','beta_fixed_shape','beta_axis_x','beta_axis_y','beta_fig_width','beta_fig_height','beta_fig_dpi','beta_perm_budget','beta_perm_seed','beta_dperm_budget','beta_dperm_seed'].forEach(function(id) { var el=document.getElementById(id); if(el) Shiny.setInputValue(id,el.value.trim()===''?'':Number(el.value),{priority:'event'}); });
+   ['beta_fixed_colour','beta_colours','beta_shapes','beta_cmp_reference','beta_cmp_evidence','beta_cmp_pairs','beta_cmp_family','beta_disp_evidence','beta_export_path'].forEach(function(id) { var el=document.getElementById(id); if(el) Shiny.setInputValue(id,el.value,{priority:'event'}); });
+  }
+  if (button.id === 'alpha_rank_apply' || button.id === 'beta_rank_apply') { var rid=button.id.replace('_apply',''); var re=document.getElementById(rid); if(re) Shiny.setInputValue(rid,re.value,{priority:'event'}); }
+  if (button.id === 'plot_apply') { var rank = document.getElementById('plot_rank'); if (rank) Shiny.setInputValue('plot_rank', rank.value, {priority:'event'}); }
+  if (button.id === 'prep_apply') { ['prep_time_lower','prep_time_upper'].forEach(function(id) { var el = document.getElementById(id); if (el) Shiny.setInputValue(id, el.value, {priority:'event'}); }); }
+  var ids = button.id === 'plot_apply' ? ['top_n'] : button.id === 'figure_apply' ? ['figure_width','figure_height','figure_dpi'] : button.id === 'prep_apply' ? ['prep_detection','prep_prevalence'] : [];
+  ids.forEach(function(id) { var el = document.getElementById(id); if (el) Shiny.setInputValue(id, el.value.trim() === '' ? '' : Number(el.value), {priority:'event'}); });
+ }, true);")),
+ shiny::tags$head(shiny::tags$style(shiny::HTML("body{background:#f5f7fa;color:#172b3a}.container-fluid{max-width:1280px;padding:24px}.well,.panel-body{background:white}h1{font-weight:700}.nav-tabs{margin:20px 0}.btn-primary{background:#147d80;border-color:#147d80}table{font-size:13px}td{overflow-wrap:anywhere}details{background:#fff;border:1px solid #dce3e9;border-radius:6px;padding:16px;margin:16px 0}summary{font-weight:600;cursor:pointer}.help-block{color:#526675}.shiny-output-error{color:#a22828}.setup-section{background:white;padding:20px;border-radius:8px;margin:14px 0}.table-wrap{overflow:auto} .input-context{background:#fff;border-left:4px solid #147d80;padding:12px 16px;margin:12px 0;overflow-wrap:anywhere}.input-context h4{margin:0 0 8px}.input-context p{margin:4px 0}.input-context details{margin:8px 0 0;padding:8px 12px}.context-secondary{color:#435865}.result-context{font-weight:600}.rank-panel{padding:10px 14px;margin:10px 0}.rank-panel .btn{margin-top:25px}summary:focus-visible,.btn:focus-visible{outline:3px solid #1565c0;outline-offset:3px}div[id^=\"alpha_\"].shiny-html-output td,div[id^=\"alpha_\"].shiny-html-output th{white-space:nowrap;overflow-wrap:normal}div[id^=\"alpha_\"].shiny-html-output table{width:max-content;min-width:100%}@media(max-width:700px){.container-fluid{padding:12px}.rank-panel .btn{margin-top:0}.input-context{padding:10px}}"))),
+ shiny::titlePanel("Microbiome Engine"),shiny::p("Explore supplied profiles, understand their limits, and save a reproducible project."),
+ shiny::textOutput("status"),
+ shiny::tabsetPanel(id="tabs",
+  shiny::tabPanel("1 \u00b7 Data setup",
+   shiny::div(class="setup-section",shiny::h3("Start with your files"),shiny::p("Supply a merged relative table, a separately merged estimated-read table, or both, plus metadata. Native per-sample read-stat and estimated-base profiles are unsupported."),
+    shiny::actionButton("example","Load synthetic example",class="btn-primary"),
+    shiny::fluidRow(shiny::column(6,shiny::fileInput("abundance","Supplied relative abundance (.tsv, optional)",accept=".tsv")),shiny::column(6,shiny::fileInput("metadata","Sample information (.csv or .tsv)",accept=c(".csv",".tsv")))),shiny::fileInput("estimates","Merged estimated reads (.tsv, optional)",accept=".tsv"),shiny::actionButton("import","Read files")),
+   shiny::uiOutput("setup"),shiny::actionButton("apply","Confirm setup and view findings",class="btn-primary")),
+  shiny::tabPanel("2 \u00b7 Findings",shiny::verbatimTextOutput("summary"),shiny::div(class="table-wrap",shiny::tableOutput("findings")),shiny::h4("How much of the supplied relative profile is shown?"),shiny::p("The difference from 100% is reported separately. It is not assumed to be unclassified abundance and is not added to the bars by default."),shiny::tableOutput("mass")),
+  shiny::tabPanel("Preparation",shiny::h3("Choose samples and named features"),shiny::p("Apply in this order: select the sample cohort, calculate prevalence within that cohort, then filter named features. Choices within each category are OR; sample, group and time clauses are combined with AND."),shiny::uiOutput("preparation_controls"),shiny::actionButton("prep_apply","Apply preparation",class="btn-primary"),shiny::actionButton("prep_reset","Reset to all samples and features"),shiny::textOutput("preparation_summary"),shiny::tableOutput("preparation_findings"),shiny::tags$details(open=NA,shiny::tags$summary("Sample decisions and exclusion reasons"),shiny::div(class="table-wrap",shiny::tableOutput("preparation_samples"))),shiny::tags$details(open=NA,shiny::tags$summary("Feature detection and prevalence decisions"),shiny::div(class="table-wrap",shiny::tableOutput("preparation_features"))),shiny::tags$details(shiny::tags$summary("Retained and removed mass"),shiny::tableOutput("preparation_mass")),shiny::helpText("Original input and full selected-rank measurements remain unchanged. Supplied Unclassified follows the retained samples and is exempt from named-feature filtering. Metadata transformations are a later Preparation chunk. No inferential or independent-unit readiness is certified."),assay_ui()),
+  shiny::tabPanel("3 \u00b7 Composition",shiny::p("These choices change the display of the active prepared samples and features. They do not define a statistical comparison or establish independent replication."),shiny::uiOutput("plot_controls"),shiny::actionButton("plot_apply","Update composition",class="btn-primary"),shiny::textOutput("composition_summary"),shiny::tableOutput("composition_findings"),shiny::plotOutput("plot",height="650px"),shiny::tableOutput("display_mass"),shiny::uiOutput("figure_controls"),shiny::actionButton("figure_apply","Apply figure settings"),shiny::textOutput("figure_status"),shiny::downloadButton("figure_download","Download figure"),shiny::downloadButton("table_download","Download exact plotted data"),shiny::tags$details(shiny::tags$summary("Inspect plotted values and full taxon IDs"),shiny::div(class="table-wrap",shiny::tableOutput("plotted_table")))),
+  alpha_ui(),beta_ui(),shiny::tabPanel("4 \u00b7 Project and export",shiny::h3("Save or reopen your work"),shiny::p("The saved project includes original input files, setup choices, metadata, display settings and operation history."),shiny::downloadButton("save","Save project"),shiny::fileInput("reopen","Reopen a saved project (.rds)",accept=".rds"),
+   shiny::h3("Export a report and runnable R code"),shiny::p("Choose a new folder inside an existing directory. Existing exports are preserved. Run replay.R from the export in a fresh R session to verify agreement."),shiny::textInput("export_path","New export folder (full path)",""),shiny::actionButton("export","Export report, figure, data and R code",class="btn-primary"),shiny::tags$details(shiny::tags$summary("Operation history"),shiny::verbatimTextOutput("history"))))
+)
+app_server <- function(input,output,session,project=NULL) {
+ if(!is.null(project))check_project(project)
+ state<-shiny::reactiveVal(project); status<-shiny::reactiveVal(if(is.null(project))"Start with an example or your two input files." else "Saved project loaded. Review its setup, findings and composition.")
+ safe<-function(expr)tryCatch(force(expr),error=function(e)status(conditionMessage(e)))
+ diversity_context_server(input,output,session,state,status,"alpha")
+ diversity_context_server(input,output,session,state,status,"beta")
+ alpha_guard<-alpha_server(input,output,session,state,status)
+ beta_guard<-beta_server(input,output,session,state,status)
+  assay_server(input,output,session,state,status)
+ set_project<-function(p){state(p);status("Project loaded. Review Data setup or explore the composition.")}
+ shiny::observeEvent(input$example,safe(set_project(example_project())))
+ shiny::observeEvent(input$import,safe({shiny::req(input$metadata);if(is.null(input$abundance)&&is.null(input$estimates))stop("Supply at least one measurement table.")
+  x<-import_metaphlan(input$abundance$datapath,input$metadata$datapath,sample_id="",estimates=input$estimates$datapath)
+  if(!is.null(input$abundance))x$sources$abundance$name<-input$abundance$name
+  if(!is.null(input$estimates))x$sources$estimates$name<-input$estimates$name
+  x$sources$metadata$name<-input$metadata$name
+  evidence<-source_evidence(x)
+  state(prepare_project(x,list(pipeline=evidence$pipeline,database=evidence$database)))
+  status("Files read. Confirm the sample-ID column, taxonomic rank and value scale below.")
+ }))
+ shiny::observeEvent(input$reopen,safe(set_project(open_project(input$reopen$datapath))))
+ output$preparation_controls<-shiny::renderUI({
+  p<-state();shiny::req(p);s<-preparation_settings(p$preparation$settings)
+  fields<-names(p$input$metadata);types<-p$design$types
+  groups<-intersect(fields,names(types)[types=="categorical"])
+  shiny::tagList(
+   shiny::div(class="setup-section",shiny::h4("1. Select the sample cohort"),shiny::helpText("Disabled clauses keep all samples. An enabled empty selection keeps none. Selections match exact supplied IDs and values; original sample order is retained."),
+    shiny::checkboxInput("prep_samples_enabled","Limit to exact sample IDs",s$samples$enabled),
+    shiny::selectInput("prep_sample_ids","Sample IDs to retain",p$input$sample_ids,selected=if(s$samples$enabled)s$samples$ids else p$input$sample_ids,multiple=TRUE,selectize=FALSE),
+    shiny::checkboxInput("prep_group_enabled","Limit by group",s$group$enabled),select_field("prep_group_field","Categorical group column (declare its type in Data setup)",groups,s$group$field),shiny::uiOutput("prep_group_choices"),
+    shiny::checkboxInput("prep_time_enabled","Limit by time or visit",s$time$enabled),select_field("prep_time_field","Time / visit column",fields,s$time$field),shiny::uiOutput("prep_time_choices")),
+   shiny::div(class="setup-section",shiny::h4("2. Filter named features by detection and prevalence"),shiny::checkboxInput("prep_filter_enabled","Enable feature filter",s$filter$enabled),
+    shiny::selectInput("prep_source","Source measurement",c(setNames("relative",if(is_estimate_only(p$input))"Relative estimated-read contribution among supplied rank rows" else "Supplied relative abundance"),if(!is.null(p$input$estimated))c("Estimated reads (not observed counts)"="estimated_reads")),selected=s$filter$source,selectize=FALSE),shiny::uiOutput("prep_units_control"),
+    shiny::fluidRow(shiny::column(6,shiny::selectInput("prep_detection_operator","A feature is detected when its value is",c("Greater than (>)"=">","At least (>=)"=">="),selected=s$filter$detection_operator,selectize=FALSE)),shiny::column(6,shiny::numericInput("prep_detection","Detection threshold in selected units",s$filter$detection,min=0))),
+    shiny::fluidRow(shiny::column(6,shiny::selectInput("prep_prevalence_operator","Retain features with prevalence",c("Greater than (>)"=">","At least (>=)"=">="),selected=s$filter$prevalence_operator,selectize=FALSE)),shiny::column(6,shiny::numericInput("prep_prevalence","Prevalence proportion (0 to 1)",s$filter$prevalence,min=0,max=1,step=.05))),
+    shiny::helpText("Prevalence = detected samples / retained cohort size. Detection and prevalence boundaries are independent. At least zero detects zero values. No universal thresholds are recommended; defaults leave filtering disabled. Percentage thresholds divide by 100 explicitly. Values are never reclosed after filtering.")),
+   shiny::helpText("Controls are pending until Apply preparation. The decisions below describe the applied recipe. Rank changes recalculate it from the original input."))
+ })
+ for(role in c("group","time"))local({r<-role;output[[paste0("prep_",r,"_choices")]]<-shiny::renderUI({
+  p<-state();shiny::req(p);s<-preparation_settings(p$preparation$settings)[[r]];field<-input[[paste0("prep_",r,"_field")]]
+  if(is.null(field)||!field%in%names(p$input$metadata))return(shiny::helpText("Choose a column to see its values."))
+  v<-p$input$metadata[[field]];values<-unique(v[!is.na(v)&nzchar(trimws(v))]);same<-identical(field,s$field)
+  type<-unname(p$design$types[field]);range_ok<-r=="time"&&length(type)==1L&&!is.na(type)&&type%in%c("continuous","date")
+  shiny::tagList(
+   if(r=="time")shiny::selectInput("prep_time_mode","Select exact visits or an inclusive range",c("Exact values"="values",if(range_ok)c("Inclusive typed range"="range")),selected=if(same)s$mode else "values",selectize=FALSE),
+   shiny::selectInput(paste0("prep_",r,"_values"),paste("Exact",r,"values (used in exact-value mode)"),values,selected=if(same)s$values else values,multiple=TRUE,selectize=FALSE),
+   shiny::checkboxInput(paste0("prep_",r,"_missing"),"Include blank or missing values in this clause",if(same)s$include_missing else FALSE),
+   if(range_ok)shiny::fluidRow(shiny::column(6,shiny::textInput("prep_time_lower",paste("Inclusive lower bound",if(type=="date")"(YYYY-MM-DD)" else ""),if(same)s$lower else "")),shiny::column(6,shiny::textInput("prep_time_upper","Inclusive upper bound",if(same)s$upper else ""))))
+ })})
+ output$prep_units_control<-shiny::renderUI({p<-state();shiny::req(p);s<-preparation_settings(p$preparation$settings)$filter;source<-input$prep_source;if(is.null(source))source<-s$source
+  shiny::selectInput("prep_units","Detection units",if(source=="estimated_reads")c("Estimated reads"="estimated_reads") else c("Proportion (0 to 1)"="proportion","Percentage equivalent (0 to 100)"="percentage"),selected=if(identical(source,s$source))s$units else if(source=="estimated_reads")"estimated_reads" else "proportion",selectize=FALSE)
+ })
+ shiny::observeEvent(input$prep_apply,safe({p<-state();shiny::req(p)
+  clause<-function(role)list(enabled=isTRUE(input[[paste0("prep_",role,"_enabled")]]),field=if(is.null(input[[paste0("prep_",role,"_field")]]))"" else input[[paste0("prep_",role,"_field")]],mode=if(role=="time"&&!is.null(input$prep_time_mode))input$prep_time_mode else "values",values=as.character(input[[paste0("prep_",role,"_values")]]),include_missing=isTRUE(input[[paste0("prep_",role,"_missing")]]),lower=if(role=="time"&&!is.null(input$prep_time_lower))input$prep_time_lower else "",upper=if(role=="time"&&!is.null(input$prep_time_upper))input$prep_time_upper else "")
+  s<-list(samples=list(enabled=isTRUE(input$prep_samples_enabled),ids=as.character(input$prep_sample_ids)),group=clause("group"),time=clause("time"),filter=list(enabled=isTRUE(input$prep_filter_enabled),source=input$prep_source,units=input$prep_units,detection=input$prep_detection,detection_operator=input$prep_detection_operator,prevalence=input$prep_prevalence,prevalence_operator=input$prep_prevalence_operator))
+  state(apply_preparation(p,s));status(if(is.null(state()$experiment))"Preparation blocked. Review its findings and edit the controls, or reset. Current composition exports are unavailable." else "Preparation applied. Composition and exports now use these retained samples and features.")
+ }))
+ shiny::observeEvent(input$prep_reset,safe({shiny::req(state());state(apply_preparation(state()));status("Preparation reset: all samples and named features at the selected rank are active.")}))
+ output$preparation_summary<-shiny::renderText({p<-state();shiny::req(p);if(is.null(p$experiment))return("No active prepared view. Resolve the findings or reset.");paste(ncol(p$experiment),"of",length(p$input$sample_ids),"samples retained;",nrow(p$experiment),"of",nrow(p$canonical),"named features retained at rank",p$declarations$rank,". Prevalence cohort:",paste(colnames(p$experiment),collapse=", "))})
+ output$preparation_findings<-shiny::renderTable({p<-state();shiny::req(p);p$findings[p$findings$severity=="error",,drop=FALSE]})
+ output$preparation_samples<-shiny::renderTable({shiny::req(state());state()$preparation$samples})
+ output$preparation_features<-shiny::renderTable({shiny::req(state());d<-state()$preparation$features;if(is.null(d))return(NULL);d[,c("feature_id","numerator","denominator","prevalence","retained","reason"),drop=FALSE]},digits=6)
+ output$preparation_mass<-shiny::renderTable({shiny::req(state());state()$mass},digits=6)
+ output$setup<-shiny::renderUI({p<-state();shiny::req(p);fields<-names(p$input$metadata);d<-p$declarations;e<-source_evidence(p$input)
+  shiny::tagList(
+   shiny::div(class="setup-section",shiny::h3("What was loaded"),shiny::p(paste(length(p$input$sample_ids),"sample columns and",nrow(p$input$values),"source rows;",nrow(p$input$metadata),"metadata rows.")),shiny::p(paste("Files:",paste(vapply(p$input$sources,function(z)z$name,character(1)),collapse=", "))),
+    shiny::selectInput("sample_id","Which metadata column identifies each sample?",c("Choose a column"="",setNames(fields,fields)),selected=p$input$sample_id,selectize=FALSE),shiny::textOutput("id_preview"),shiny::tags$details(shiny::tags$summary("Preview original metadata"),shiny::tableOutput("metadata_preview"))),
+   shiny::div(class="setup-section",shiny::h3("Confirm the values to display"),shiny::p("Choose one taxonomic rank. Parent and child rows are never added together."),
+    shiny::selectInput("rank","Which taxonomic level do you want to view?",rank_choices(p$input),selected=d$rank,selectize=FALSE),
+    if(!is_estimate_only(p$input))shiny::selectInput("scale","How are the supplied values expressed?",c("Confirm the scale"="","Values are percentages (0\u2013100)"="percentage","Values are proportions (0\u20131)"="proportion"),selected=d$scale,selectize=FALSE),shiny::textOutput("scale_hint"),if(!is.null(p$input$estimated))shiny::selectInput("estimate_unit","Confirm estimated measurement units",c("Choose units"="","Estimated reads"="estimated_reads"),selected=p$declarations$estimate_unit,selectize=FALSE),if(is_estimate_only(p$input))shiny::checkboxInput("estimate_normalization","Normalize to relative estimated read contribution among supplied rows",isTRUE(d$estimate_normalization)),shiny::textOutput("required_setup"),
+    if(is_estimate_only(p$input))shiny::p("100% is the sum of supplied selected-rank named estimates plus supplied UNCLASSIFIED, if present. It does not represent the entire community.") else shiny::selectInput("denominator_kind","What does 100% represent?",c("Not known"="unknown","The profiled / classified community"="profiled","A profile including an estimated unclassified fraction"="including_unclassified"),selected=d$denominator_kind,selectize=FALSE),
+    shiny::selectInput("coverage","What happened to taxa before this table was supplied?",c("Not known"="unknown","Complete profile at the selected rank"="complete","Taxa removed without rescaling"="removed","Rescaled after filtering"="rescaled"),selected=d$coverage,selectize=FALSE),
+    shiny::helpText(if(is_estimate_only(p$input))"Explicit normalization divides each selected-rank estimate by the sum of named estimates at that rank plus supplied UNCLASSIFIED once. This is not MetaPhlAn relative abundance, cell abundance or raw counts." else "These choices explain percentages and any fraction absent from the table. They do not supply a library size, turn values into counts, or rescale the data. Unknown history is acceptable for this descriptive view.")),
+   shiny::tags$details(shiny::tags$summary("Source details \u2014 read from headers when available"),shiny::p(paste("Pipeline from file:",if(nzchar(e$pipeline))e$pipeline else "Not available in file")),shiny::p(paste("Database from file:",if(nzchar(e$database))e$database else "Not available in file")),shiny::verbatimTextOutput("header_evidence"),shiny::textInput("pipeline","Pipeline / version override (optional)",d$pipeline),shiny::textInput("database","Database / version override (optional)",d$database),shiny::textInput("filtering","Additional processing notes (optional)",d$filtering),shiny::textInput("unclassified","Notes about supplied unclassified values (optional)",d$unclassified)),
+   shiny::tags$details(shiny::tags$summary("Review metadata \u2014 original values stay unchanged"),shiny::p("Types start as text unless already confirmed in this project. Review examples before changing a type; choosing a type does not establish a scientific role."),
+    shiny::tags$table(class="table",shiny::tags$thead(shiny::tags$tr(shiny::tags$th("Column"),shiny::tags$th("Example values"),shiny::tags$th("Declared type"))),shiny::tags$tbody(lapply(seq_along(fields),function(i){n<-fields[i];current<-p$design$types[n];if(!length(current)||is.na(current))current<-"text";shiny::tags$tr(shiny::tags$td(n),shiny::tags$td(paste(head(unique(p$input$metadata[[n]]),4),collapse=", ")),shiny::tags$td(shiny::selectInput(paste0("type_",i),NULL,c("text","id","categorical","continuous","date"),selected=current,selectize=FALSE)))})))),
+   shiny::tags$details(shiny::tags$summary("Study information for later analyses \u2014 optional"),shiny::p("Choose which columns describe your samples. The choices below come from your metadata file. You can skip this section for a composition preview."),
+    select_field("design_group","Which column contains the treatment or comparison group?",fields,p$design$group),shiny::textOutput("preview_group"),
+    select_field("design_time","Which column records sampling time?",fields,p$design$time),shiny::textOutput("preview_time"),shiny::helpText("For example: day, visit or sampling date. This records study information; it does not fit a time model."),
+    select_field("design_unit","Which column identifies the biological or experimental unit?",fields,p$design$unit),shiny::textOutput("preview_unit"),shiny::helpText("For example: participant, animal, plot or culture. A sample ID identifies a measurement; it does not by itself prove independent replication."),
+    shiny::selectInput("repetition","Was the same unit sampled more than once?",c("Not sure / not provided"="unknown","Yes"="yes","No"="no"),selected=if(is.null(p$design$repetition))"unknown" else p$design$repetition,selectize=FALSE),
+    shiny::conditionalPanel("input.repetition == 'yes'",select_field("design_repeated","Which column links measurements from the same unit?",fields,p$design$repeated),shiny::textOutput("preview_repeated")),
+    shiny::selectInput("covariates","Other sample characteristics to record for later analyses (optional)",fields,selected=p$design$covariates,multiple=TRUE,selectize=FALSE),shiny::helpText("No models are fitted in this milestone. These selections do not certify independence or readiness for repeated-measures analysis."))
+  )
+ })
+ output$metadata_preview<-shiny::renderTable({shiny::req(state());head(state()$input$metadata,6)})
+ output$header_evidence<-shiny::renderText({shiny::req(state());source_evidence(state()$input)$source})
+ output$id_preview<-shiny::renderText({p<-state();shiny::req(p);n<-input$sample_id;if(is.null(n)||!n %in% names(p$input$metadata))return("Required: choose the column whose values match the abundance sample names.");v<-p$input$metadata[[n]];paste(sum(p$input$sample_ids %in% v),"of",length(p$input$sample_ids),"abundance IDs match.","Examples:",paste(head(v,4),collapse=", "),"| Blank IDs:",sum(!nzchar(trimws(v))),"| Duplicates:",sum(duplicated(v)))})
+ output$scale_hint<-shiny::renderText({p<-state();shiny::req(p);if(is_estimate_only(p$input))return("Estimated reads have a different measurement basis. Explicit opt-in is required for supplied-row contribution; no relative scale is inferred.");v<-p$input$values[is.finite(p$input$values)];paste("Observed range:",paste(range(v),collapse=" to "),". MetaPhlAn relative profiles commonly use percentages; confirm against your source. Numeric range alone cannot establish the scale.")})
+ output$required_setup<-shiny::renderText({missing<-c(if(is.null(input$sample_id)||!nzchar(input$sample_id))"sample-ID column",if(is.null(input$rank)||!nzchar(input$rank))"rank",if(!is.null(state())&&!is_estimate_only(state()$input)&&(is.null(input$scale)||!nzchar(input$scale)))"value scale");if(length(missing))paste("Still required:",paste(missing,collapse=", ")) else "Required choices selected. Confirm setup to validate the values and sample matches."})
+ for(role in c("group","time","unit","repeated"))local({r<-role;output[[paste0("preview_",r)]]<-shiny::renderText({p<-state();shiny::req(p);n<-input[[paste0("design_",r)]];if(is.null(n)||!n %in% names(p$input$metadata))"Can be skipped." else paste("Selected values:",paste(head(unique(p$input$metadata[[n]]),6),collapse=", "))})})
+ shiny::observeEvent(input$apply,safe({p<-state();shiny::req(p)
+  names_d<-c("rank","scale","denominator_kind","coverage","pipeline","database","filtering","unclassified","estimate_unit","estimate_normalization")
+  decl<-setNames(lapply(names_d,function(n)input[[n]]),names_d)
+  if(is_estimate_only(p$input)){decl$denominator_kind<-"unknown";decl$scale<-NULL}
+  design<-setNames(lapply(c("group","time","unit"),function(n)input[[paste0("design_",n)]]),c("group","time","unit"))
+  design$repetition<-input$repetition;design$repeated<-if(identical(input$repetition,"yes"))input$design_repeated else "";design$covariates<-input$covariates
+  design$types<-setNames(vapply(seq_along(p$input$metadata),function(i)input[[paste0("type_",i)]],character(1)),names(p$input$metadata))
+  x<-p$input;x$sample_id<-input$sample_id;s<-p$settings;s$residual<-FALSE
+  state(retain_analysis(p,prepare_project(x,decl,design,s,p$preparation$settings)));shiny::updateTabsetPanel(session,"tabs",selected="2 \u00b7 Findings");status("Setup saved. Review findings, then open Preparation or Composition.")
+ }))
+ output$plot_controls<-shiny::renderUI({p<-state();shiny::req(p);fields<-names(p$input$metadata);shiny::tagList(shiny::selectInput("plot_rank","Taxonomic level",rank_choices(p$input),selected=p$declarations$rank,selectize=FALSE),shiny::helpText("Uses supplied rows at this level. Update composition also updates the level shown in Data setup; parent and child rows are never added together."),shiny::fluidRow(shiny::column(6,select_field("plot_group","Show individual samples, or mean values by this column",fields,p$settings$group)),shiny::column(6,select_field("plot_facet","Split the figure into panels using this column",fields,p$settings$facet))),shiny::fluidRow(shiny::column(6,shiny::selectInput("plot_order","Order bars",c("Input order"="input","Alphabetical"="alphabetical","Selected-taxon total"="total"),selected=p$settings$order,selectize=FALSE)),shiny::column(6,shiny::selectInput("plot_palette","Colour palette",c("viridis","Set 2","Dark 3"),selected=p$settings$palette,selectize=FALSE))),shiny::fluidRow(shiny::column(6,shiny::selectInput("taxa_mode","Named taxa to show",c("All taxa"="all","Top N"="top"),selected=p$settings$taxa_mode,selectize=FALSE)),shiny::column(6,shiny::numericInput("top_n","Number of named taxa",p$settings$top_n,min=1,step=1))),shiny::checkboxInput("show_other","Show Other (remaining named taxa)",p$settings$show_other),shiny::checkboxInput("show_unclassified","Show supplied Unclassified",p$settings$show_unclassified),shiny::helpText("Top taxa use mean contribution across retained samples and features; Other contains only non-displayed retained named taxa. Feature-removed mass and hidden display mass are reported separately without rescaling."),shiny::tags$details(shiny::tags$summary("Optional difference-from-100% display"),shiny::checkboxInput("plot_residual","Include the unassigned difference as a labelled display segment",value=isTRUE(p$settings$residual)),shiny::helpText("Only available after confirming what 100% represents and that taxa were removed without rescaling. This segment is not a taxon or an estimate of unclassified organisms.")))})
+ shiny::observeEvent(input$plot_apply,safe({p<-state();shiny::req(p);s<-modifyList(p$settings,list(group=input$plot_group,facet=input$plot_facet,order=input$plot_order,palette=input$plot_palette,residual=input$plot_residual,taxa_mode=input$taxa_mode,top_n=input$top_n,show_other=input$show_other,show_unclassified=input$show_unclassified));d<-p$declarations;if(!is.null(input$plot_rank))d$rank<-input$plot_rank;state(retain_analysis(p,prepare_project(p$input,d,p$design,s,p$preparation$settings)));status(if(is.null(state()$table))"Composition blocked. Review the findings here, choose a supplied compatible level and update again." else "Composition display updated.")}))
+ output$composition_summary<-shiny::renderText({p<-state();shiny::req(p);paste("Applied taxonomic level:",p$declarations$rank,"|",if(is.null(p$experiment))"No validated composition at this level" else paste(nrow(SummarizedExperiment::assay(p$experiment,"relative")),"named taxa at this level"))})
+ output$composition_findings<-shiny::renderTable({p<-state();shiny::req(p);p$findings[p$findings$severity=="error"|p$findings$code=="composition_limit",,drop=FALSE]})
+ output$display_mass<-shiny::renderTable({shiny::req(state());state()$display_mass},digits=4)
+ output$figure_controls<-shiny::renderUI({shiny::req(state());s<-state()$settings$figure;shiny::tagList(shiny::h4("Figure export settings"),shiny::selectInput("figure_format","Format",if(requireNamespace("svglite",quietly=TRUE))c("png","pdf","svg") else c("png","pdf"),selected=s$format,selectize=FALSE),shiny::fluidRow(shiny::column(3,shiny::numericInput("figure_width","Width",s$width)),shiny::column(3,shiny::numericInput("figure_height","Height",s$height)),shiny::column(3,shiny::selectInput("figure_units","Units",c("in","cm","mm"),selected=s$units,selectize=FALSE)),shiny::column(3,shiny::numericInput("figure_dpi","DPI",s$dpi,min=72,max=600))))})
+ pending_figure<-shiny::reactive(list(format=input$figure_format,width=input$figure_width,height=input$figure_height,units=input$figure_units,dpi=input$figure_dpi))
+ output$figure_status<-shiny::renderText({shiny::req(state());s<-state()$settings$figure;paste("Applied:",s$format,s$width,"x",s$height,s$units,"at",s$dpi,"DPI.",if(!isTRUE(all.equal(pending_figure(),s,check.attributes=FALSE)))"Pending changes: click Apply figure settings before downloading or exporting." else "Downloads and full export use these applied settings.")})
+ shiny::observeEvent(input$figure_apply,safe({p<-state();shiny::req(p);p$settings$figure<-figure_settings(pending_figure());p$history[[length(p$history)+1L]]<-list(operation="figure_settings",settings=p$settings$figure);state(p);status("Figure settings applied; downloads and full export use these settings.")}))
+ output$figure_download<-shiny::downloadHandler(filename=function(){shiny::req(state());paste0("composition.",state()$settings$figure$format)},content=function(file){shiny::req(state()$table);tmp<-tempfile(fileext=paste0(".",state()$settings$figure$format));on.exit(unlink(tmp));export_figure(state(),tmp);if(!file.copy(tmp,file,overwrite=TRUE))stop("Download transfer failed.")})
+ output$status<-shiny::renderText(status())
+ output$summary<-shiny::renderText({p<-state();shiny::req(p);paste(length(p$input$sample_ids),"samples |",nrow(p$input$values),"source rows |",if(is.null(p$experiment))"Composition blocked: resolve the errors below." else paste(nrow(SummarizedExperiment::assay(p$experiment,"relative")),"selected taxa"),"\nThese input findings are descriptive. Review design separately for Alpha or Beta comparisons.")})
+ output$findings<-shiny::renderTable({shiny::req(state());state()$findings},striped=TRUE)
+ output$mass<-shiny::renderTable({shiny::req(state());state()$mass},digits=4)
+ output$plot<-shiny::renderPlot({p<-state();shiny::req(p);shiny::validate(shiny::need(!is.null(p$table),"Resolve findings or choose a smaller top N and Update composition."));plot_composition(p)})
+ output$plotted_table<-shiny::renderTable({shiny::req(state());state()$table},digits=4)
+ output$history<-shiny::renderPrint({shiny::req(state());state()$history})
+ output$save<-shiny::downloadHandler(filename=function()"microbiome-project.rds",content=function(file){shiny::req(state());{alpha_guard();beta_guard();save_project(state(),file)}})
+ output$table_download<-shiny::downloadHandler(filename=function()"composition.tsv",content=function(file){shiny::req(state()$table);tmp<-tempfile(fileext=".tsv");on.exit(unlink(tmp));export_composition_data(state(),tmp);file.copy(tmp,file,overwrite=TRUE)})
+ shiny::observeEvent(input$export,safe({shiny::req(state());{alpha_guard();beta_guard();export_project(state(),input$export_path)};status(paste("Export complete:",input$export_path))}))
+}
+
+
+

@@ -1,8 +1,0 @@
-.tester-library/
-installed-versions.tsv
-.Rproj.user/
-.Rhistory
-.RData
-.library/
-.artifacts/
-*.Rcheck/

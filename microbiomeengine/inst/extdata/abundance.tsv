@@ -1,8 +1,0 @@
-#synthetic_database_v1
-clade_name	S1	S2	S3	S4
-UNCLASSIFIED	10	10	10	10
-k__Bacteria	90	90	90	90
-k__Bacteria|p__Firmicutes|g__Alpha	60	40	20	30
-k__Bacteria|p__Bacteroidota|g__Beta	20	40	60	50
-k__Bacteria|p__Firmicutes|g__Alpha|s__Alpha_one	60	40	20	30
-k__Bacteria|p__Bacteroidota|g__Beta|s__Beta_one	20	40	60	50
